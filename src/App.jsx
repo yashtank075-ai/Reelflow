@@ -20,6 +20,8 @@ import {
   Smartphone
 } from 'lucide-react';
 
+import AdminAnalytics from './AdminAnalytics.jsx';
+
 function formatDuration(seconds) {
   if (!seconds || typeof seconds !== 'number') return null;
   const mins = Math.floor(seconds / 60);
@@ -39,6 +41,10 @@ function formatBytes(bytes) {
 }
 
 export default function App() {
+  const [isAdminView, setIsAdminView] = useState(() => {
+    return window.location.pathname.startsWith('/admin') || window.location.hash === '#admin';
+  });
+
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -50,6 +56,43 @@ export default function App() {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // 'privacy' | 'terms' | 'contact'
   const inputRef = useRef(null);
+
+  // Synchronize browser history/hash changes
+  useState(() => {
+    const handlePop = () => {
+      setIsAdminView(window.location.pathname.startsWith('/admin') || window.location.hash === '#admin');
+    };
+    window.addEventListener('popstate', handlePop);
+    window.addEventListener('hashchange', handlePop);
+  });
+
+  if (isAdminView) {
+    return (
+      <div className="app-shell">
+        <header className="topbar">
+          <div className="wrap nav-container">
+            <a className="brand" href="/" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/'); setIsAdminView(false); }} aria-label="ReelFlow Home">
+              <span className="brand-mark">
+                <Clapperboard size={19} />
+              </span>
+              <span>
+                reelflow<span className="brand-dot">.</span>
+              </span>
+            </a>
+            <div className="top-pill">
+              <span className="live-dot" />
+              <span>Admin Console</span>
+            </div>
+          </div>
+        </header>
+
+        <AdminAnalytics onBack={() => {
+          window.history.pushState({}, '', '/');
+          setIsAdminView(false);
+        }} />
+      </div>
+    );
+  }
 
   // Quick paste from clipboard
   async function handlePaste() {

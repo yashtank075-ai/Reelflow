@@ -8,6 +8,23 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+import { 
+  initAnalyticsDb, 
+  recordAnalyticsEvent, 
+  recordRateLimitHit, 
+  pruneOldAnalytics, 
+  getAggregatedAnalytics 
+} from './analytics.js';
+import { 
+  verifyAdminPassword, 
+  createAdminSession, 
+  destroyAdminSession, 
+  isValidAdminSession, 
+  checkLoginRateLimit, 
+  requireAdminAuth,
+  extractToken
+} from './auth.js';
+
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -16,8 +33,12 @@ const MAX_ACTIVE_DOWNLOADS = Number(process.env.MAX_ACTIVE_DOWNLOADS || 2);
 let activeDownloads = 0;
 const rateBuckets = new Map();
 
+// Initialize analytics storage & retention timers
+initAnalyticsDb().catch(() => {});
+setInterval(pruneOldAnalytics, 24 * 60 * 60 * 1000).unref();
+
 app.set('trust proxy', 1);
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
 app.use(express.json({ limit: '20kb' }));
 
 function pruneRateBuckets() {
@@ -36,7 +57,12 @@ app.use((req, res, next) => {
   if (now - bucket.start > 60_000) { bucket.start = now; bucket.count = 0; }
   bucket.count += 1; 
   rateBuckets.set(key, bucket);
-  if (bucket.count > 30) return res.status(429).json({ error: 'Too many requests. Please wait a minute and try again.' });
+  if (bucket.count > 30) {
+    if (bucket.count === 31) {
+      recordRateLimitHit();
+    }
+    return res.status(429).json({ error: 'Too many requests. Please wait a minute and try again.' });
+  }
   next();
 });
 
@@ -165,20 +191,69 @@ function safeMetadata(info, parsed, token) {
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'ReelFlow API', downloader: 'yt-dlp', credentialsRequired: false, supportedPlatforms: ['instagram', 'facebook'] }));
 
 app.post('/api/media/lookup', async (req, res) => {
+  const startTime = Date.now();
   const parsed = parseMediaPermalink(String(req.body?.url || '').trim());
-  if (!parsed) return res.status(400).json({ error: 'Enter a supported public Instagram Reel or Facebook video URL.' });
+  if (!parsed) {
+    recordAnalyticsEvent({
+      eventType: 'lookup',
+      platform: 'unknown',
+      outcome: 'failed',
+      errorCategory: 'Invalid or unsupported URL',
+      durationMs: Date.now() - startTime,
+      statusCode: 400
+    });
+    return res.status(400).json({ error: 'Enter a supported public Instagram Reel or Facebook video URL.' });
+  }
+
   try {
     const { stdout } = await runYtDlp(['--dump-single-json', '--no-warnings', '--no-playlist', '--skip-download', '--socket-timeout', '12', '--retries', '1', '--', parsed.canonical], 35_000);
     let info;
     try { info = JSON.parse(stdout.trim()); } catch { throw new Error('The platform returned unreadable media metadata.'); }
-    if (!info || (!info.url && !Array.isArray(info.formats))) return res.status(404).json({ error: 'No downloadable public video was found for this link.' });
+    if (!info || (!info.url && !Array.isArray(info.formats))) {
+      recordAnalyticsEvent({
+        eventType: 'lookup',
+        platform: parsed.provider,
+        outcome: 'failed',
+        errorCategory: 'No downloadable media found',
+        durationMs: Date.now() - startTime,
+        statusCode: 404
+      });
+      return res.status(404).json({ error: 'No downloadable public video was found for this link.' });
+    }
+
     pruneDownloadJobs();
     const token = randomUUID();
     downloadJobs.set(token, { url: parsed.canonical, provider: parsed.provider, expiresAt: Date.now() + JOB_TTL_MS });
+
+    recordAnalyticsEvent({
+      eventType: 'lookup',
+      platform: parsed.provider,
+      outcome: 'success',
+      durationMs: Date.now() - startTime,
+      statusCode: 200
+    });
+
     return res.json(safeMetadata(info, parsed, token));
   } catch (error) {
     const message = error.message || 'Could not retrieve this video.';
     const status = message.includes('missing yt-dlp') ? 503 : (message.includes('timed out') ? 504 : 422);
+
+    let errorCategory = 'Platform error';
+    if (message.includes('missing yt-dlp')) errorCategory = 'Server missing yt-dlp';
+    else if (message.includes('timed out')) errorCategory = 'Lookup timed out';
+    else if (message.includes('Instagram blocked guest access')) errorCategory = 'Instagram login required';
+    else if (message.includes('private') || message.includes('login required')) errorCategory = 'Restricted or login required';
+    else if (message.includes('rate-limit') || message.includes('429')) errorCategory = 'Platform rate-limited';
+
+    recordAnalyticsEvent({
+      eventType: 'lookup',
+      platform: parsed.provider,
+      outcome: message.includes('timed out') ? 'timeout' : 'failed',
+      errorCategory,
+      durationMs: Date.now() - startTime,
+      statusCode: status
+    });
+
     return res.status(status).json({ error: message });
   }
 });
@@ -192,17 +267,64 @@ function formatForQuality(quality) {
 }
 
 app.get('/api/media/:token/download', async (req, res) => {
+  const startTime = Date.now();
   pruneDownloadJobs();
   const token = String(req.params.token || '');
   const job = downloadJobs.get(token);
-  if (!job || !/^[a-f0-9-]{36}$/i.test(token)) return res.status(404).json({ error: 'This download link expired. Find the video again and retry.' });
-  if (activeDownloads >= MAX_ACTIVE_DOWNLOADS) return res.status(429).json({ error: 'The downloader is busy. Please retry shortly.' });
+  if (!job || !/^[a-f0-9-]{36}$/i.test(token)) {
+    recordAnalyticsEvent({
+      eventType: 'download',
+      platform: 'unknown',
+      outcome: 'failed',
+      errorCategory: 'Expired or invalid download token',
+      durationMs: Date.now() - startTime,
+      statusCode: 404
+    });
+    return res.status(404).json({ error: 'This download link expired. Find the video again and retry.' });
+  }
+
+  if (activeDownloads >= MAX_ACTIVE_DOWNLOADS) {
+    recordAnalyticsEvent({
+      eventType: 'download',
+      platform: job.provider,
+      outcome: 'failed',
+      errorCategory: 'Downloader busy (concurrency limit)',
+      durationMs: Date.now() - startTime,
+      statusCode: 429
+    });
+    return res.status(429).json({ error: 'The downloader is busy. Please retry shortly.' });
+  }
+
   activeDownloads += 1;
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'reelflow-'));
   const outputTemplate = path.join(dir, 'reelflow.%(ext)s');
   let finished = false;
-  const cleanup = async () => { if (finished) return; finished = true; activeDownloads = Math.max(0, activeDownloads - 1); await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {}); };
-  res.on('close', () => { if (!res.writableEnded) cleanup(); });
+  let downloadRecorded = false;
+
+  const cleanup = async () => { 
+    if (finished) return; 
+    finished = true; 
+    activeDownloads = Math.max(0, activeDownloads - 1); 
+    await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {}); 
+  };
+
+  res.on('close', () => { 
+    if (!res.writableEnded) {
+      if (!downloadRecorded) {
+        downloadRecorded = true;
+        recordAnalyticsEvent({
+          eventType: 'download',
+          platform: job.provider,
+          outcome: 'aborted',
+          errorCategory: 'Client disconnected before download completed',
+          durationMs: Date.now() - startTime,
+          statusCode: 499
+        });
+      }
+      cleanup();
+    }
+  });
+
   try {
     await runYtDlp(['--no-warnings', '--no-playlist', '--no-part', '--max-filesize', String(MAX_DOWNLOAD_BYTES), '--socket-timeout', '12', '--retries', '1', '-f', formatForQuality(req.query.quality), '-o', outputTemplate, '--', job.url], 120_000);
     const files = await fs.promises.readdir(dir);
@@ -212,17 +334,109 @@ app.get('/api/media/:token/download', async (req, res) => {
     const stat = await fs.promises.stat(fullPath);
     if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_DOWNLOAD_BYTES) throw new Error('The video exceeded the permitted download size.');
     const ext = path.extname(filename).toLowerCase();
+
     res.setHeader('Content-Type', ext === '.mp4' ? 'video/mp4' : 'application/octet-stream');
     res.setHeader('Content-Length', String(stat.size));
     res.setHeader('Content-Disposition', `attachment; filename="reelflow-${job.provider}-${token.slice(0, 8)}.${ext === '.mp4' ? 'mp4' : 'video'}"`);
     res.setHeader('Cache-Control', 'no-store');
+
     const stream = fs.createReadStream(fullPath);
-    stream.on('error', async () => { if (!res.headersSent) res.status(500).json({ error: 'Could not read the downloaded file.' }); await cleanup(); });
-    stream.on('close', cleanup);
+    stream.on('error', async () => { 
+      if (!downloadRecorded) {
+        downloadRecorded = true;
+        recordAnalyticsEvent({
+          eventType: 'download',
+          platform: job.provider,
+          outcome: 'failed',
+          errorCategory: 'Disk stream error',
+          durationMs: Date.now() - startTime,
+          statusCode: 500
+        });
+      }
+      if (!res.headersSent) res.status(500).json({ error: 'Could not read the downloaded file.' }); 
+      await cleanup(); 
+    });
+
+    stream.on('close', () => {
+      if (!downloadRecorded) {
+        downloadRecorded = true;
+        recordAnalyticsEvent({
+          eventType: 'download',
+          platform: job.provider,
+          outcome: 'success',
+          durationMs: Date.now() - startTime,
+          statusCode: 200
+        });
+      }
+      cleanup();
+    });
+
     stream.pipe(res);
   } catch (error) {
+    if (!downloadRecorded) {
+      downloadRecorded = true;
+      const msg = error.message || '';
+      let cat = 'Download processing failed';
+      if (msg.includes('timed out')) cat = 'Download timed out';
+      else if (msg.includes('exceeded the permitted download size')) cat = 'Exceeded maximum file size';
+      else if (msg.includes('missing yt-dlp')) cat = 'Server missing yt-dlp';
+
+      recordAnalyticsEvent({
+        eventType: 'download',
+        platform: job.provider,
+        outcome: msg.includes('timed out') ? 'timeout' : 'failed',
+        errorCategory: cat,
+        durationMs: Date.now() - startTime,
+        statusCode: msg.includes('missing yt-dlp') ? 503 : 422
+      });
+    }
+
     await cleanup();
     if (!res.headersSent) res.status(error.message?.includes('missing yt-dlp') ? 503 : 422).json({ error: error.message || 'Download failed. The Reel may be unavailable or restricted.' });
+  }
+});
+
+// Admin Authentication & Analytics APIs
+app.post('/api/admin/login', checkLoginRateLimit, (req, res) => {
+  const { password } = req.body || {};
+  if (!verifyAdminPassword(password)) {
+    return res.status(401).json({ error: 'Invalid admin password.' });
+  }
+  const token = createAdminSession();
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.cookie('reelflow_admin_token', token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'strict' : 'lax',
+    maxAge: 12 * 60 * 60 * 1000
+  });
+  return res.json({ ok: true, token });
+});
+
+app.post('/api/admin/logout', (req, res) => {
+  const token = extractToken(req);
+  if (token) {
+    destroyAdminSession(token);
+  }
+  res.clearCookie('reelflow_admin_token');
+  return res.json({ ok: true });
+});
+
+app.get('/api/admin/auth/check', (req, res) => {
+  const token = extractToken(req);
+  return res.json({ authenticated: isValidAdminSession(token) });
+});
+
+app.get('/api/admin/analytics', requireAdminAuth, async (req, res) => {
+  const range = String(req.query.range || '7d');
+  if (!['24h', '7d', '30d'].includes(range)) {
+    return res.status(400).json({ error: 'Invalid range filter. Allowed values: 24h, 7d, 30d' });
+  }
+  try {
+    const data = await getAggregatedAnalytics(range, activeDownloads);
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to retrieve analytics.' });
   }
 });
 
