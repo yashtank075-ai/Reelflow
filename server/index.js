@@ -73,6 +73,11 @@ function resolveYtDlpBinary() {
   if (process.env.YT_DLP_PATH && fs.existsSync(process.env.YT_DLP_PATH)) {
     return process.env.YT_DLP_PATH;
   }
+  // Check local project bin directory (common on Render/Linux deployments)
+  const localBin = path.resolve(__dirname, '../bin/yt-dlp');
+  if (fs.existsSync(localBin)) {
+    return localBin;
+  }
   // Check common Windows WinGet installation directory
   if (process.platform === 'win32') {
     const localAppData = process.env.LOCALAPPDATA || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Local') : '');
