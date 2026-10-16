@@ -175,7 +175,7 @@ export default function App() {
                 <Clapperboard size={19} />
               </span>
               <span>
-                reelflow<span className="brand-dot">.</span>
+                ReelFlow<span className="brand-dot">.</span>
               </span>
             </a>
             <div className="top-pill">
@@ -200,7 +200,7 @@ export default function App() {
                 <Clapperboard size={18} />
               </span>
               <span>
-                reelflow<span className="brand-dot">.</span>
+                ReelFlow<span className="brand-dot">.</span>
               </span>
             </a>
 
@@ -590,7 +590,7 @@ export default function App() {
               <Clapperboard size={19} />
             </span>
             <span>
-              reelflow<span className="brand-dot">.</span>
+              ReelFlow<span className="brand-dot">.</span>
             </span>
           </a>
 
@@ -1198,7 +1198,7 @@ export default function App() {
               <Clapperboard size={16} />
             </span>
             <span>
-              reelflow<span className="brand-dot">.</span>
+              ReelFlow<span className="brand-dot">.</span>
             </span>
           </a>
 
