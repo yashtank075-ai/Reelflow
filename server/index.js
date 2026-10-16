@@ -41,6 +41,14 @@ app.set('trust proxy', 1);
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
 app.use(express.json({ limit: '20kb' }));
 
+// Search engine indexation guard for admin and API routes
+app.use((req, res, next) => {
+  if (req.path.startsWith('/admin') || req.path.startsWith('/api/')) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  }
+  next();
+});
+
 function pruneRateBuckets() {
   const now = Date.now();
   for (const [key, bucket] of rateBuckets) {
@@ -439,6 +447,30 @@ app.get('/api/admin/analytics', requireAdminAuth, async (req, res) => {
     return res.status(500).json({ error: 'Failed to retrieve analytics.' });
   }
 });
+
+// SEO endpoints: robots.txt and sitemap.xml
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.sendFile(path.join(clientDist, 'robots.txt'), (err) => {
+    if (err) {
+      res.type('text/plain').send(
+        `User-agent: *\nAllow: /\nAllow: /assets/\nAllow: /og-image.jpg\nDisallow: /admin\nDisallow: /admin/\nDisallow: /api/admin\nDisallow: /api/admin/\nDisallow: /api/media/download\n\nSitemap: https://reelflow-fq7d.onrender.com/sitemap.xml\n`
+      );
+    }
+  });
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  res.type('application/xml');
+  res.sendFile(path.join(clientDist, 'sitemap.xml'), (err) => {
+    if (err) {
+      res.type('application/xml').send(
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://reelflow-fq7d.onrender.com/</loc>\n    <lastmod>2026-10-16</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n`
+      );
+    }
+  });
+});
+
 
 const clientDist = path.resolve(__dirname, '../dist');
 app.use(express.static(clientDist));

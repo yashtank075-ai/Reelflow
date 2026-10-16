@@ -1,0 +1,18 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /assets/
+Allow: /og-image.jpg
+Allow: /robots.txt
+Allow: /sitemap.xml
+
+# Protect internal APIs and admin interfaces from search engine indexing
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/admin
+Disallow: /api/admin/
+Disallow: /api/media/download
+
+# Sitemap index location
+Sitemap: https://reelflow-fq7d.onrender.com/sitemap.xml

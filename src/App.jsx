@@ -267,12 +267,12 @@ export default function App() {
           </div>
 
           <h1>
-            Save the moments.<br />
-            <span>Keep the memories.</span>
+            Download Instagram Reels &amp;<br />
+            <span>Facebook Videos Fast.</span>
           </h1>
 
           <p className="hero-copy">
-            Paste any public Instagram Reel or Facebook video link to preview media and save it in high definition without logging in.
+            Save publicly accessible Instagram Reels and Facebook videos with ReelFlow. Choose an available video quality and download supported videos easily.
           </p>
 
           <div className="platform-chips">
