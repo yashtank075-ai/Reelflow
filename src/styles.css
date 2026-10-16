@@ -1200,26 +1200,36 @@ body {
 }
 
 .btn-delete-entry {
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
   cursor: pointer;
-  padding: 4px;
-  border-radius: var(--radius-sm);
-  display: grid;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-grid;
   place-items: center;
-  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .btn-delete-entry:hover {
-  color: #fca5a5;
-  background: rgba(239, 68, 68, 0.12);
+  color: #fff;
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: scale(1.08);
 }
 
 .btn-delete-entry:focus-visible {
   outline: none;
-  color: #fca5a5;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4);
+  color: #fff;
+  background: rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.5);
+}
+
+.btn-delete-entry:active {
+  transform: scale(0.92);
 }
 
 .history-storage-warning {
@@ -1261,10 +1271,12 @@ body {
   }
 
   .history-item {
+    position: relative;
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 12px 14px;
+    padding-right: 44px; /* Space for the cancel button at top-right */
   }
 
   .history-item-main {
@@ -1273,15 +1285,19 @@ body {
 
   .history-item-meta {
     width: 100%;
-    justify-content: space-between;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
-    gap: 6px;
-    padding-top: 4px;
+    gap: 8px;
+    padding-top: 6px;
     border-top: 1px solid rgba(255, 255, 255, 0.04);
   }
 
   .btn-delete-entry {
-    margin-left: auto;
+    position: absolute;
+    top: 10px;
+    right: 10px;
   }
 }
 

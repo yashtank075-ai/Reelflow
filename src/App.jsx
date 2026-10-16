@@ -1001,17 +1001,17 @@ export default function App() {
                             <Clock size={12} className="history-time-icon" aria-hidden="true" />
                             <span>{formattedTime}</span>
                           </time>
-
-                          <button
-                            type="button"
-                            className="btn-delete-entry"
-                            onClick={() => removeHistoryEntry(entry.id)}
-                            aria-label={`Remove "${entry.title}" from history`}
-                            title="Remove from history"
-                          >
-                            <X size={14} />
-                          </button>
                         </div>
+
+                        <button
+                          type="button"
+                          className="btn-delete-entry"
+                          onClick={() => removeHistoryEntry(entry.id)}
+                          aria-label={`Remove "${entry.title}" from history`}
+                          title="Remove from history"
+                        >
+                          <X size={15} />
+                        </button>
                       </li>
                     );
                   })}
