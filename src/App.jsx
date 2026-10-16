@@ -587,16 +587,28 @@ export default function App() {
         <div className="wrap nav-container">
           <a className="brand" href="/" aria-label="ReelFlow Home">
             <span className="brand-mark">
-              <Clapperboard size={19} />
+              <Clapperboard size={18} />
             </span>
             <span>
               ReelFlow<span className="brand-dot">.</span>
             </span>
           </a>
 
-          <div className="top-pill">
-            <span className="live-dot" />
-            <span>Operational</span>
+          <nav className="nav-links" aria-label="Main Navigation">
+            <a href="#features" className="nav-link">Features</a>
+            <a href="#how-it-works" className="nav-link">How It Works</a>
+            <a href="#faq" className="nav-link">FAQ</a>
+          </nav>
+
+          <div className="nav-actions">
+            <div className="top-pill operational">
+              <span className="live-dot" />
+              <span>Operational</span>
+            </div>
+            <a href="#url-input" className="top-pill action-pill" onClick={() => inputRef.current?.focus()}>
+              <Zap size={11} className="action-pill-icon" />
+              <span>Quick Save</span>
+            </a>
           </div>
         </div>
       </header>
@@ -1036,7 +1048,7 @@ export default function App() {
         </section>
 
         {/* Feature Grid Section */}
-        <section className="section wrap">
+        <section className="section wrap" id="features">
           <div className="section-heading">
             <span className="mini-label">WHY REELFLOW</span>
             <h2>
@@ -1074,7 +1086,7 @@ export default function App() {
         </section>
 
         {/* How It Works Section */}
-        <section className="how-section">
+        <section className="how-section" id="how-it-works">
           <div className="wrap">
             <div className="section-heading">
               <span className="mini-label">HOW IT WORKS</span>
@@ -1196,48 +1208,52 @@ export default function App() {
       </main>
 
       {/* Modern Footer with Navigation */}
-      <footer className="footer wrap">
-        <div className="footer-top">
-          <a className="brand" href="/" aria-label="ReelFlow Home">
-            <span className="brand-mark">
-              <Clapperboard size={16} />
-            </span>
-            <span>
-              ReelFlow<span className="brand-dot">.</span>
-            </span>
-          </a>
+      <footer className="footer">
+        <div className="wrap footer-wrap">
+          <div className="footer-top">
+            <a className="brand" href="/" aria-label="ReelFlow Home">
+              <span className="brand-mark">
+                <Clapperboard size={17} />
+              </span>
+              <span>
+                ReelFlow<span className="brand-dot">.</span>
+              </span>
+            </a>
 
-          <div className="footer-nav">
-            <a 
-              className="footer-link" 
-              href="https://reelflow-fq7d.onrender.com/privacy" 
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              Privacy Policy
-            </a>
-            <a 
-              className="footer-link" 
-              href="https://reelflow-fq7d.onrender.com/terms" 
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              Terms of Service
-            </a>
-            <a 
-              className="footer-link" 
-              href="https://reelflow-fq7d.onrender.com/contact" 
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              Contact
-            </a>
+            <div className="footer-nav">
+              <a 
+                className="footer-link" 
+                href="/privacy" 
+                onClick={(e) => { e.preventDefault(); navigateTo('privacy'); }}
+              >
+                Privacy Policy
+              </a>
+              <a 
+                className="footer-link" 
+                href="/terms" 
+                onClick={(e) => { e.preventDefault(); navigateTo('terms'); }}
+              >
+                Terms of Service
+              </a>
+              <a 
+                className="footer-link" 
+                href="/contact" 
+                onClick={(e) => { e.preventDefault(); navigateTo('contact'); }}
+              >
+                Contact
+              </a>
+            </div>
+          </div>
+
+          <div className="footer-bottom">
+            <p className="footer-disclaimer">
+              Independent utility. Not affiliated with Instagram, Facebook, or Meta. Download only public media you own or have permission from its rights holder to save. Respect copyright law and platform guidelines.
+            </p>
+            <p className="footer-copyright">
+              © 2026 ReelFlow. All rights reserved.
+            </p>
           </div>
         </div>
-
-        <p className="footer-disclaimer">
-          Independent utility. Not affiliated with Instagram, Facebook, or Meta. Download only public media you own or have permission from its rights holder to save. Respect copyright law and platform guidelines.
-        </p>
       </footer>
     </div>
   );
