@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="100%" height="100%">
+  <defs>
+    <!-- Vibrant brand gradient: #8b5cf6 -> #c026d3 -> #ec4899 -->
+    <linearGradient id="rf-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="50%" stop-color="#c026d3" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+
+    <!-- Subtle top-down inner rim highlight for premium SaaS finish -->
+    <linearGradient id="rf-rim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.40" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.06" />
+    </linearGradient>
+  </defs>
+
+  <!-- High-contrast rounded squircle container -->
+  <rect x="51" y="51" width="922" height="922" rx="225" ry="225" fill="url(#rf-bg)" />
+  <rect x="53" y="53" width="918" height="918" rx="223" ry="223" fill="none" stroke="url(#rf-rim)" stroke-width="12" />
+
+  <!-- Harmonious Video Play + Download Flow Emblem -->
+  <g fill="#ffffff">
+    <!-- Play Triangle (Left) with smooth rounded vertices -->
+    <path d="M 166 224 
+             C 142 208 114 226 114 254 
+             L 114 770 
+             C 114 798 142 816 166 800 
+             L 470 536 
+             C 490 522 490 502 470 488 
+             Z" />
+
+    <!-- Download Arrow Vertical Shaft (Right) -->
+    <rect x="646" y="224" width="112" height="276" rx="24" ry="24" />
+
+    <!-- Download Arrowhead (Right) -->
+    <path d="M 556 482 
+             C 538 482 530 504 542 518 
+             L 688 688 
+             C 696 698 708 698 716 688 
+             L 862 518 
+             C 874 504 866 482 848 482 
+             Z" />
+
+    <!-- Download Base Tray Bar (Under Arrow) -->
+    <rect x="552" y="744" width="300" height="58" rx="29" ry="29" />
+  </g>
+</svg>
