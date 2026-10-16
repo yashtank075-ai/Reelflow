@@ -21,9 +21,13 @@ import {
   Info,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
   ArrowLeft,
   Mail,
-  FileText
+  FileText,
+  History,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 import AdminAnalytics from './AdminAnalytics.jsx';
@@ -44,6 +48,52 @@ function formatBytes(bytes) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+const HISTORY_STORAGE_KEY = 'reelflow_recent_downloads';
+const MAX_HISTORY_ENTRIES = 20;
+
+function loadStoredHistory() {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return [];
+    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(item => item && typeof item === 'object' && typeof item.id === 'string' && typeof item.timestamp === 'number')
+      .slice(0, MAX_HISTORY_ENTRIES);
+  } catch (err) {
+    console.warn('Could not read download history from storage:', err);
+    return [];
+  }
+}
+
+function persistHistory(entries) {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+  
+  let currentList = entries.slice(0, MAX_HISTORY_ENTRIES);
+  while (currentList.length > 0) {
+    try {
+      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(currentList));
+      return true; // Successfully saved
+    } catch (err) {
+      const isQuotaError = 
+        err.name === 'QuotaExceededError' || 
+        err.name === 'NS_ERROR_DOM_QUOTA_REACHED' || 
+        err.code === 22 || 
+        err.code === 1014;
+
+      if (isQuotaError && currentList.length > 1) {
+        // Evict the oldest entry and retry
+        currentList = currentList.slice(0, currentList.length - 1);
+      } else {
+        console.warn('Could not persist download history (storage full or restricted):', err.message);
+        return false;
+      }
+    }
+  }
+  return false;
 }
 
 function getInitialPage() {
@@ -69,6 +119,10 @@ export default function App() {
   const [thumbError, setThumbError] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // Quick drawer/modal if opened in-place
+  const [openFaq, setOpenFaq] = useState(null); // Index of expanded FAQ accordion item
+  const [downloadHistory, setDownloadHistory] = useState(loadStoredHistory);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [historyStorageWarning, setHistoryStorageWarning] = useState(false);
   const inputRef = useRef(null);
 
   // Synchronize browser history & page titles
@@ -412,11 +466,33 @@ export default function App() {
     }
   }
 
+  function removeHistoryEntry(id) {
+    setDownloadHistory(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      persistHistory(updated);
+      return updated;
+    });
+  }
+
+  function clearAllHistory() {
+    setDownloadHistory([]);
+    persistHistory([]);
+    setShowClearConfirm(false);
+  }
+
   async function downloadVideo() {
     if (!result?.downloadUrl || downloading) return;
     setDownloading(true);
     setError('');
     setDownloadSuccess(false);
+
+    // Prepare reliable history metadata
+    const historyId = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const platform = result.provider === 'facebook' ? 'Facebook' : 'Instagram';
+    const cleanTitle = (result.title && typeof result.title === 'string' && result.title.trim().length > 0)
+      ? result.title.trim().substring(0, 80)
+      : `${platform} Video`;
+    const qualityLabel = quality === 'best' ? 'Original / Best' : `${quality}p`;
 
     try {
       const response = await fetch(`${result.downloadUrl}?quality=${encodeURIComponent(quality)}`);
@@ -438,8 +514,54 @@ export default function App() {
       URL.revokeObjectURL(objectUrl);
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 4000);
+
+      // Record initiated / saved entry
+      const newEntry = {
+        id: historyId,
+        provider: result.provider === 'facebook' ? 'facebook' : 'instagram',
+        title: cleanTitle,
+        quality: qualityLabel,
+        timestamp: Date.now(),
+        status: 'started' // Browser initiated download stream
+      };
+
+      setDownloadHistory(prev => {
+        const filtered = prev.filter(item => item.id !== historyId);
+        const updated = [newEntry, ...filtered].slice(0, MAX_HISTORY_ENTRIES);
+        const saved = persistHistory(updated);
+        if (!saved && updated.length > 0) {
+          setHistoryStorageWarning(true);
+        } else {
+          setHistoryStorageWarning(false);
+        }
+        return updated;
+      });
     } catch (err) {
-      setError(err.message || 'Download failed. Please try again.');
+      const isConcurrencyBusy = err.message && (err.message.includes('busy') || err.message.includes('retry'));
+      const friendlyError = isConcurrencyBusy
+        ? 'Downloads are busy right now. Please wait a few seconds and try again.'
+        : (err.message || 'Download failed. Please try again.');
+      setError(friendlyError);
+
+      // Record failed entry so user is aware
+      const failedEntry = {
+        id: historyId,
+        provider: result.provider === 'facebook' ? 'facebook' : 'instagram',
+        title: cleanTitle,
+        quality: qualityLabel,
+        timestamp: Date.now(),
+        status: 'failed'
+      };
+
+      setDownloadHistory(prev => {
+        const filtered = prev.filter(item => item.id !== historyId);
+        const updated = [failedEntry, ...filtered].slice(0, MAX_HISTORY_ENTRIES);
+        const saved = persistHistory(updated);
+        if (!saved && updated.length > 0) {
+          setHistoryStorageWarning(true);
+        }
+        return updated;
+      });
     } finally {
       setDownloading(false);
     }
@@ -771,6 +893,141 @@ export default function App() {
               <Check size={15} /> Fully Responsive
             </span>
           </div>
+
+          {/* Recent Downloads History Panel */}
+          <section className="history-section" aria-labelledby="history-heading">
+            <div className="history-header">
+              <div className="history-title-wrap">
+                <span className="history-badge-icon" aria-hidden="true">
+                  <History size={16} />
+                </span>
+                <div>
+                  <h3 id="history-heading" className="history-title">Recent Downloads</h3>
+                  <p className="history-subtitle">Stored privately on this browser • Max 20 items</p>
+                </div>
+              </div>
+
+              {downloadHistory.length > 0 && (
+                <div className="history-actions">
+                  {showClearConfirm ? (
+                    <div className="clear-confirm-group">
+                      <span className="confirm-text">Clear all?</span>
+                      <button 
+                        type="button"
+                        className="btn-history-confirm"
+                        onClick={clearAllHistory}
+                        aria-label="Confirm clear all history"
+                      >
+                        Yes, Clear
+                      </button>
+                      <button 
+                        type="button"
+                        className="btn-history-cancel"
+                        onClick={() => setShowClearConfirm(false)}
+                        aria-label="Cancel clearing history"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-clear-history"
+                      onClick={() => setShowClearConfirm(true)}
+                      aria-label="Clear download history"
+                    >
+                      <Trash2 size={13} />
+                      <span>Clear History</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {downloadHistory.length === 0 ? (
+              <div className="history-empty">
+                <span className="history-empty-icon" aria-hidden="true">
+                  <Download size={20} />
+                </span>
+                <p className="history-empty-text">No recent downloads yet.</p>
+                <small className="history-empty-sub">
+                  When you download an Instagram Reel or Facebook video, it will appear here for easy reference. History is saved locally in this browser only.
+                </small>
+              </div>
+            ) : (
+              <div className="history-list-wrap">
+                <ul className="history-list" role="list">
+                  {downloadHistory.map((entry) => {
+                    const dateObj = new Date(entry.timestamp);
+                    const formattedTime = !isNaN(dateObj.getTime())
+                      ? dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + dateObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                      : 'Recently';
+
+                    const isFacebook = entry.provider === 'facebook';
+
+                    return (
+                      <li key={entry.id} className="history-item">
+                        <div className="history-item-main">
+                          <span className={`history-platform-tag ${isFacebook ? 'facebook' : 'instagram'}`}>
+                            {isFacebook ? <Zap size={11} /> : <Sparkles size={11} />}
+                            <span>{isFacebook ? 'Facebook' : 'Instagram'}</span>
+                          </span>
+
+                          <span className="history-item-title" title={entry.title}>
+                            {entry.title}
+                          </span>
+                        </div>
+
+                        <div className="history-item-meta">
+                          <span className="history-quality-badge">
+                            {entry.quality || 'MP4'}
+                          </span>
+
+                          <span className={`history-status-badge ${entry.status}`}>
+                            {entry.status === 'started' ? (
+                              <>
+                                <span className="status-indicator-dot success" />
+                                <span>Download Started</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="status-indicator-dot failed" />
+                                <span>Failed</span>
+                              </>
+                            )}
+                          </span>
+
+                          <time className="history-time" dateTime={new Date(entry.timestamp).toISOString()}>
+                            <Clock size={12} className="history-time-icon" aria-hidden="true" />
+                            <span>{formattedTime}</span>
+                          </time>
+
+                          <button
+                            type="button"
+                            className="btn-delete-entry"
+                            onClick={() => removeHistoryEntry(entry.id)}
+                            aria-label={`Remove "${entry.title}" from history`}
+                            title="Remove from history"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {historyStorageWarning && (
+                  <div className="history-storage-warning" role="alert">
+                    <AlertTriangle size={13} />
+                    <span>Browser storage is nearly full or restricted. Oldest items were removed to preserve space.</span>
+                  </div>
+                )}
+                <div className="history-footer-note">
+                  <span>Privacy Notice:</span> Stored strictly in local browser storage (localStorage). Never synced or logged on ReelFlow servers.
+                </div>
+              </div>
+            )}
+          </section>
         </section>
 
         {/* Feature Grid Section */}
@@ -843,32 +1100,92 @@ export default function App() {
         </section>
 
         {/* FAQ Section */}
-        <section className="section wrap">
+        <section className="section wrap faq-section" id="faq" aria-labelledby="faq-title">
           <div className="section-heading">
             <span className="mini-label">FAQS</span>
-            <h2>Frequently Asked Questions</h2>
+            <h2 id="faq-title">Frequently Asked Questions</h2>
+            <p>Everything you need to know about downloading public Instagram Reels and Facebook videos with ReelFlow.</p>
           </div>
 
-          <div className="faq-grid">
-            <div className="faq-item">
-              <h4>Does it work on mobile phones?</h4>
-              <p>Yes. ReelFlow is fully mobile responsive and touch-optimized for Safari, Chrome, and all major mobile browsers.</p>
-            </div>
+          <div className="faq-accordion" role="region" aria-label="Frequently Asked Questions Accordion">
+            {[
+              {
+                q: "What is ReelFlow?",
+                a: "ReelFlow is a fast, web-based utility designed to download publicly accessible Instagram Reels and Facebook videos. It fetches public stream formats using an optimized media processing pipeline, allowing users to save their favorite public clips directly to their device in clean MP4 format without installing apps or browser extensions."
+              },
+              {
+                q: "How do I download an Instagram Reel?",
+                a: "Downloading is straightforward in three simple steps: 1) Copy the link of any public Instagram Reel (from the share menu in the Instagram app or your browser address bar); 2) Paste the link into the search bar at the top of ReelFlow and click 'Find Video'; 3) Once the video preview and available resolutions appear, select your preferred quality and click 'Download MP4'."
+              },
+              {
+                q: "Can I download Facebook videos?",
+                a: "Yes. ReelFlow supports standard public Facebook video posts, Facebook Watch clips, and public Facebook Reels. Simply copy the public link from Facebook, paste it into the downloader, and retrieve the video."
+              },
+              {
+                q: "Can I choose video quality?",
+                a: "Yes, when multiple formats are supplied by the hosting platform. ReelFlow inspects the media stream and presents available resolutions (such as Original/Best, 1080p, 720p, or 480p). Note that quality options depend strictly on what the source video was originally uploaded with and what the platform exposes publicly."
+              },
+              {
+                q: "Do I need to log in to Instagram or Facebook?",
+                a: "No. ReelFlow never asks for your Instagram or Facebook credentials, passwords, session cookies, or personal accounts. It is entirely anonymous and interacts only with publicly accessible URLs."
+              },
+              {
+                q: "Why is my video URL not working?",
+                a: "A URL may fail to load if: 1) The post is private, friends-only, or restricted to logged-in accounts; 2) The video was deleted or removed by its author; 3) The link is malformed or belongs to an unsupported URL format (such as temporary Stories or private direct messages); 4) The platform is temporarily rate-limiting requests or changing its delivery endpoint."
+              },
+              {
+                q: "Why is my video download failing?",
+                a: "Downloads can fail if your download token expired (tokens are kept valid for 15 minutes for security and memory efficiency), if the upstream server broke the stream connection, or if your network disconnected during multiplexing. If this happens, simply click 'Find Video' again to generate a fresh link."
+              },
+              {
+                q: "Can I use ReelFlow on my mobile phone?",
+                a: "Yes. ReelFlow is built with a responsive, mobile-first design. It works seamlessly on iOS (Safari, Chrome) and Android (Chrome, Firefox, Samsung Internet). On iPhones, downloads save directly to your Files app or Photos gallery."
+              },
+              {
+                q: "Does ReelFlow store my downloaded videos?",
+                a: "No. ReelFlow does not operate a permanent media storage library or database of user downloads. All video processing is transient: media is fetched and streamed directly to your browser, and temporary working files on the server are purged immediately upon stream completion or disconnection. Operational logs record only aggregate system health metrics (like total lookups and success rates) with zero raw video links or visitor IP addresses."
+              },
+              {
+                q: "Is ReelFlow free to use?",
+                a: "Yes, ReelFlow is free to use for personal, fair-use archiving and research. Please ensure you respect copyright laws and platform terms: download only media that you own, create, or have explicit permission from the rights holder to archive."
+              }
+            ].map((item, idx) => {
+              const isOpen = openFaq === idx;
+              const buttonId = `faq-btn-${idx}`;
+              const panelId = `faq-panel-${idx}`;
 
-            <div className="faq-item">
-              <h4>Do I need an account or Instagram login?</h4>
-              <p>Never. ReelFlow does not require accounts, credentials, or cookies. It processes only public accessible media.</p>
-            </div>
+              return (
+                <div 
+                  key={idx} 
+                  className={`faq-accordion-item ${isOpen ? 'open' : ''}`}
+                >
+                  <button
+                    type="button"
+                    id={buttonId}
+                    className="faq-accordion-trigger"
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                  >
+                    <span className="faq-question-text">{item.q}</span>
+                    <span className="faq-icon-wrap" aria-hidden="true">
+                      <ChevronDown size={18} className={`faq-chevron ${isOpen ? 'rotated' : ''}`} />
+                    </span>
+                  </button>
 
-            <div className="faq-item">
-              <h4>Can I save private videos or stories?</h4>
-              <p>No. ReelFlow strictly respects platform privacy and access controls. Only public Reels and video posts are supported.</p>
-            </div>
-
-            <div className="faq-item">
-              <h4>Where are downloaded files saved?</h4>
-              <p>Files are saved directly to your device's default Downloads folder or your Photos app gallery.</p>
-            </div>
+                  <div
+                    id={panelId}
+                    role="region"
+                    aria-labelledby={buttonId}
+                    className={`faq-accordion-panel ${isOpen ? 'expanded' : 'collapsed'}`}
+                  >
+                    <div className="faq-accordion-content">
+                      <p>{item.a}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
       </main>

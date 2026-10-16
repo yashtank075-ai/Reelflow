@@ -26,14 +26,34 @@ export function pruneAdminSessions() {
 setInterval(pruneAdminSessions, 15 * 60_000).unref();
 
 /**
- * Validate admin password securely against ADMIN_SECRET or ADMIN_PASSWORD
+ * Ensure an admin secret is configured in production or warn in development.
+ */
+export function validateAdminSecretConfig() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const configuredPassword = (process.env.ADMIN_PASSWORD || process.env.ADMIN_SECRET || '').trim();
+
+  if (!configuredPassword) {
+    if (isProduction) {
+      throw new Error('[Security Error] Production requires a non-empty ADMIN_PASSWORD or ADMIN_SECRET environment variable. Server startup aborted.');
+    } else {
+      console.warn('[Security Warning] No ADMIN_PASSWORD or ADMIN_SECRET configured. Admin login is disabled until an environment variable is provided.');
+    }
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Validate admin password securely against ADMIN_SECRET or ADMIN_PASSWORD.
+ * Rejects all logins if no secret is configured. Never uses hardcoded fallback passwords.
  */
 export function verifyAdminPassword(inputPassword) {
-  const configuredPassword = process.env.ADMIN_PASSWORD || process.env.ADMIN_SECRET || 'reelflow-admin-2026';
+  const configuredPassword = (process.env.ADMIN_PASSWORD || process.env.ADMIN_SECRET || '').trim();
+  if (!configuredPassword) return false;
   if (!inputPassword || typeof inputPassword !== 'string') return false;
 
   const inputBuf = Buffer.from(crypto.createHash('sha256').update(inputPassword.trim()).digest());
-  const expectedBuf = Buffer.from(crypto.createHash('sha256').update(configuredPassword.trim()).digest());
+  const expectedBuf = Buffer.from(crypto.createHash('sha256').update(configuredPassword).digest());
 
   if (inputBuf.length !== expectedBuf.length) return false;
   return crypto.timingSafeEqual(inputBuf, expectedBuf);

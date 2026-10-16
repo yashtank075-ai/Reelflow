@@ -16,6 +16,7 @@ import {
   getAggregatedAnalytics 
 } from './analytics.js';
 import { 
+  validateAdminSecretConfig,
   verifyAdminPassword, 
   createAdminSession, 
   destroyAdminSession, 
@@ -24,6 +25,9 @@ import {
   requireAdminAuth,
   extractToken
 } from './auth.js';
+
+// Validate admin credentials configuration on boot
+validateAdminSecretConfig();
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -38,16 +42,55 @@ initAnalyticsDb().catch(() => {});
 setInterval(pruneOldAnalytics, 24 * 60 * 60 * 1000).unref();
 
 app.set('trust proxy', 1);
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
-app.use(express.json({ limit: '20kb' }));
 
-// Search engine indexation guard for admin and API routes
+// Security Headers Middleware
 app.use((req, res, next) => {
+  // Prevent MIME-sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  // Prevent clickjacking via frame embedding
+  res.setHeader('X-Frame-Options', 'DENY');
+
+  // Privacy-friendly referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Restrict browser features and sensors
+  res.setHeader('Permissions-Policy', 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()');
+
+  // Content Security Policy
+  // Allows Google Fonts (fonts.googleapis.com, fonts.gstatic.com) and local bundle assets
+  // Intentionally allows unsafe-inline styles for dynamic React progress styles, tooltips, and font definitions
+  // Allows img-src https: data: blob: for Instagram/Facebook media thumbnails and blob downloads
+  // frame-ancestors 'none' reinforces clickjacking defense
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' https: data: blob:",
+    "media-src 'self' blob:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; ');
+  res.setHeader('Content-Security-Policy', csp);
+
+  // Enforce HSTS in production for secure HTTPS traffic behind Render proxy
+  if (process.env.NODE_ENV === 'production' || req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+
+  // Search engine indexation guard for admin and API routes
   if (req.path.startsWith('/admin') || req.path.startsWith('/api/')) {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   }
+
   next();
 });
+
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
+app.use(express.json({ limit: '20kb' }));
 
 function pruneRateBuckets() {
   const now = Date.now();
@@ -84,18 +127,85 @@ function parseMediaPermalink(input) {
   try { url = new URL(input); } catch { return null; }
   const host = url.hostname.toLowerCase();
   if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
+
   if (INSTAGRAM_HOSTS.has(host)) {
     const match = url.pathname.match(/^\/(reel|reels|p)\/([A-Za-z0-9_-]+)\/?$/i);
     if (!match) return null;
     return { provider: 'instagram', id: match[2], canonical: `https://www.instagram.com/${match[1].toLowerCase()}/${match[2]}/` };
   }
+
   if (FACEBOOK_HOSTS.has(host)) {
-    const isVideoPath = /^\/(?:watch\/?|reel\/|share\/v\/|share\/r\/|videos\/|[^/]+\/videos\/)/i.test(url.pathname) || host === 'fb.watch';
-    const hasVideoId = url.searchParams.has('v') || url.searchParams.has('story_fbid') || /\/(?:videos|reel|share\/[vr])\/[A-Za-z0-9._-]+/i.test(url.pathname) || host === 'fb.watch';
-    if (!isVideoPath || !hasVideoId) return null;
-    url.hash = '';
-    return { provider: 'facebook', id: url.pathname.split('/').filter(Boolean).pop()?.slice(0, 100) || 'video', canonical: url.toString() };
+    // 1. fb.watch shortlinks: https://fb.watch/xyz123/
+    if (host === 'fb.watch') {
+      const match = url.pathname.match(/^\/([A-Za-z0-9._-]+)\/?$/);
+      if (!match) return null;
+      return { 
+        provider: 'facebook', 
+        id: match[1], 
+        canonical: `https://fb.watch/${match[1]}/` 
+      };
+    }
+
+    // 2. Query-based Facebook videos: e.g. /watch/?v=12345 or /video.php?v=12345
+    if (url.searchParams.has('v')) {
+      const vId = url.searchParams.get('v');
+      const isWatchPath = /^\/(?:watch\/?|video\.php\/?)$/i.test(url.pathname);
+      if (!isWatchPath || !vId || !/^[A-Za-z0-9._-]+$/.test(vId)) return null;
+      return {
+        provider: 'facebook',
+        id: vId.slice(0, 100),
+        canonical: `https://www.facebook.com/watch/?v=${encodeURIComponent(vId)}`
+      };
+    }
+
+    if (url.searchParams.has('story_fbid')) {
+      const isPermalink = /^\/(?:permalink\.php|story\.php)\/?$/i.test(url.pathname);
+      if (!isPermalink) return null;
+      const fbid = url.searchParams.get('story_fbid');
+      if (!fbid || !/^[A-Za-z0-9._-]+$/.test(fbid)) return null;
+      const cleanParams = new URLSearchParams();
+      cleanParams.set('story_fbid', fbid);
+      if (url.searchParams.has('id')) {
+        const userId = url.searchParams.get('id');
+        if (userId && /^[A-Za-z0-9._-]+$/.test(userId)) cleanParams.set('id', userId);
+      }
+      return {
+        provider: 'facebook',
+        id: fbid.slice(0, 100),
+        canonical: `https://www.facebook.com/permalink.php?${cleanParams.toString()}`
+      };
+    }
+
+    // 3. Path-based Facebook videos: /reel/{id}, /share/v/{id}, /share/r/{id}, /videos/{id}, /{user}/videos/{id}
+    const pathSegments = url.pathname.split('/').filter(Boolean);
+    const videoIdx = pathSegments.findIndex(seg => /^(reel|videos)$/i.test(seg));
+    const shareIdx = pathSegments.findIndex(seg => /^share$/i.test(seg));
+
+    let videoId = null;
+    let normalizedPath = null;
+
+    if (videoIdx !== -1 && pathSegments[videoIdx + 1]) {
+      videoId = pathSegments[videoIdx + 1];
+      normalizedPath = `/${pathSegments[videoIdx].toLowerCase()}/${videoId}/`;
+    } else if (shareIdx !== -1 && pathSegments[shareIdx + 1] && pathSegments[shareIdx + 2]) {
+      const shareType = pathSegments[shareIdx + 1].toLowerCase(); // v or r
+      videoId = pathSegments[shareIdx + 2];
+      if (/^[vr]$/.test(shareType)) {
+        normalizedPath = `/share/${shareType}/${videoId}/`;
+      }
+    }
+
+    if (videoId && /^[A-Za-z0-9._-]+$/.test(videoId) && normalizedPath) {
+      return {
+        provider: 'facebook',
+        id: videoId.slice(0, 100),
+        canonical: `https://www.facebook.com${normalizedPath}`
+      };
+    }
+
+    return null;
   }
+
   return null;
 }
 function pruneDownloadJobs() {
@@ -351,7 +461,11 @@ app.get('/api/media/:token/download', async (req, res) => {
       durationMs: Date.now() - startTime,
       statusCode: 429
     });
-    return res.status(429).json({ error: 'The downloader is busy. Please retry shortly.' });
+    res.setHeader('Retry-After', '10');
+    return res.status(429).json({ 
+      error: 'Downloads are busy right now. Please wait a few seconds and try again.',
+      retryAfter: 10
+    });
   }
 
   activeDownloads += 1;
