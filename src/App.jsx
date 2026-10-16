@@ -636,13 +636,18 @@ export default function App() {
             <form className="lookup-form" onSubmit={lookup}>
               <div className="input-wrap">
                 <Link2 size={20} className="input-icon" />
+                <label htmlFor="url-input" className="sr-only">
+                  Instagram Reel or Facebook video URL
+                </label>
                 <input
                   ref={inputRef}
+                  id="url-input"
                   type="url"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   placeholder="Paste Instagram Reel or Facebook URL..."
                   aria-label="Instagram or Facebook video URL"
+                  aria-describedby="input-desc"
                   required
                 />
                 <div className="input-tools">
@@ -685,7 +690,7 @@ export default function App() {
               </button>
             </form>
 
-            <div className="input-caption">
+            <div className="input-caption" id="input-desc">
               <span>
                 <ShieldCheck size={14} /> No Account Required · Privacy-Conscious Processing
               </span>
@@ -803,12 +808,12 @@ export default function App() {
 
                   {/* Dynamic Video Quality Selector */}
                   <div className="quality-control">
-                    <div className="quality-control-label">
+                    <label htmlFor="video-quality" className="quality-control-label">
                       <span>Select Resolution</span>
                       <small>
                         {maxDetectedHeight ? `Source max: ${maxDetectedHeight}p` : 'MP4 video stream'}
                       </small>
-                    </div>
+                    </label>
                     <div className="quality-select-wrapper">
                       <select
                         id="video-quality"

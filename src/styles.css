@@ -15,8 +15,8 @@
 
   --text-main: #f8fafc;
   --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-muted: #9db0c6;
+  --text-dim: #8e9eb5;
 
   /* Brand Accents */
   --brand-purple: #8b5cf6;
@@ -56,6 +56,19 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 html {
@@ -563,7 +576,7 @@ body {
   justify-content: space-between;
   gap: 12px;
   color: var(--text-dim);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 500;
 }
 
@@ -1706,7 +1719,7 @@ body {
 }
 
 .footer-disclaimer {
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   line-height: 1.65;
   color: var(--text-dim);
   max-width: 900px;
@@ -1918,7 +1931,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
-    font-size: 0.74rem;
+    font-size: 0.78rem;
   }
 
   .trust-row {
