@@ -132,10 +132,49 @@ function resolveYtDlpBinary() {
   return process.env.YT_DLP_PATH || 'yt-dlp';
 }
 
+function resolveFfmpegBinary() {
+  if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
+    return process.env.FFMPEG_PATH;
+  }
+  const localBin = path.resolve(__dirname, '../bin/ffmpeg');
+  if (fs.existsSync(localBin)) {
+    return localBin;
+  }
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Local') : '');
+    if (localAppData) {
+      const wingetDir = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+      if (fs.existsSync(wingetDir)) {
+        try {
+          const entries = fs.readdirSync(wingetDir);
+          const pkg = entries.find(name => name.toLowerCase().includes('ffmpeg'));
+          if (pkg) {
+            const pkgPath = path.join(wingetDir, pkg);
+            // Search bin folder or direct directory
+            const candidateBin = path.join(pkgPath, 'bin', 'ffmpeg.exe');
+            if (fs.existsSync(candidateBin)) return candidateBin;
+            const subdirs = fs.readdirSync(pkgPath);
+            for (const sub of subdirs) {
+              const nestedBin = path.join(pkgPath, sub, 'bin', 'ffmpeg.exe');
+              if (fs.existsSync(nestedBin)) return nestedBin;
+            }
+          }
+        } catch {}
+      }
+    }
+  }
+  return null;
+}
+
 function runYtDlp(args, timeoutMs = 45_000) {
   return new Promise((resolve, reject) => {
     const binary = resolveYtDlpBinary();
-    const child = spawn(binary, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const finalArgs = [...args];
+    const ffmpegPath = resolveFfmpegBinary();
+    if (ffmpegPath && !finalArgs.includes('--ffmpeg-location')) {
+      finalArgs.unshift('--ffmpeg-location', path.dirname(ffmpegPath));
+    }
+    const child = spawn(binary, finalArgs, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = ''; let settled = false;
     const timer = setTimeout(() => { child.kill('SIGKILL'); finish(new Error('The media request timed out. Try again later.')); }, timeoutMs);
     const finish = (err, value) => { if (settled) return; settled = true; clearTimeout(timer); err ? reject(err) : resolve(value); };
@@ -196,7 +235,14 @@ function safeMetadata(info, parsed, token) {
   };
 }
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'ReelFlow API', downloader: 'yt-dlp', credentialsRequired: false, supportedPlatforms: ['instagram', 'facebook'] }));
+app.get('/api/health', (_req, res) => res.json({ 
+  ok: true, 
+  service: 'ReelFlow API', 
+  downloader: 'yt-dlp', 
+  ffmpeg: Boolean(resolveFfmpegBinary()),
+  credentialsRequired: false, 
+  supportedPlatforms: ['instagram', 'facebook'] 
+}));
 
 app.post('/api/media/lookup', async (req, res) => {
   const startTime = Date.now();
@@ -269,9 +315,14 @@ app.post('/api/media/lookup', async (req, res) => {
 function formatForQuality(quality) {
   const allowed = new Set(['best', '1080', '720', '480', '360']);
   const selected = allowed.has(String(quality || 'best')) ? String(quality || 'best') : 'best';
-  if (selected === 'best') return 'best[ext=mp4]/best';
+  if (selected === 'best') {
+    // Priority:
+    // 1. Best video with audio merged: bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio
+    // 2. Best pre-merged video with audio: best[ext=mp4]/best
+    return 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best';
+  }
   const height = Number(selected);
-  return `best[height<=${height}][ext=mp4]/best[height<=${height}]/best`;
+  return `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/best`;
 }
 
 app.get('/api/media/:token/download', async (req, res) => {
@@ -334,7 +385,7 @@ app.get('/api/media/:token/download', async (req, res) => {
   });
 
   try {
-    await runYtDlp(['--no-warnings', '--no-playlist', '--no-part', '--max-filesize', String(MAX_DOWNLOAD_BYTES), '--socket-timeout', '12', '--retries', '1', '-f', formatForQuality(req.query.quality), '-o', outputTemplate, '--', job.url], 120_000);
+    await runYtDlp(['--no-warnings', '--no-playlist', '--no-part', '--merge-output-format', 'mp4', '--max-filesize', String(MAX_DOWNLOAD_BYTES), '--socket-timeout', '12', '--retries', '1', '-f', formatForQuality(req.query.quality), '-o', outputTemplate, '--', job.url], 120_000);
     const files = await fs.promises.readdir(dir);
     const filename = files.find(name => /^reelflow\.[a-zA-Z0-9]{1,8}$/.test(name));
     if (!filename) throw new Error('No video file was produced. The Reel may be unavailable or restricted.');
