@@ -276,7 +276,7 @@ function resolveFfmpegBinary() {
   return null;
 }
 
-function runYtDlp(args, timeoutMs = 45_000) {
+function runYtDlp(args, timeoutMs = 45_000, abortSignal = null) {
   return new Promise((resolve, reject) => {
     const binary = resolveYtDlpBinary();
     const finalArgs = [...args];
@@ -287,7 +287,27 @@ function runYtDlp(args, timeoutMs = 45_000) {
     const child = spawn(binary, finalArgs, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = ''; let settled = false;
     const timer = setTimeout(() => { child.kill('SIGKILL'); finish(new Error('The media request timed out. Try again later.')); }, timeoutMs);
-    const finish = (err, value) => { if (settled) return; settled = true; clearTimeout(timer); err ? reject(err) : resolve(value); };
+    const finish = (err, value) => { 
+      if (settled) return; 
+      settled = true; 
+      clearTimeout(timer); 
+      if (abortSignal) abortSignal.removeEventListener('abort', onAbort);
+      err ? reject(err) : resolve(value); 
+    };
+
+    const onAbort = () => {
+      child.kill('SIGKILL');
+      finish(new Error('Download cancelled by client.'));
+    };
+
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        onAbort();
+      } else {
+        abortSignal.addEventListener('abort', onAbort, { once: true });
+      }
+    }
+
     child.stdout.on('data', chunk => { stdout += chunk.toString(); if (stdout.length > 2_000_000) { child.kill('SIGKILL'); finish(new Error('Media metadata response was too large.')); } });
     child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-4000); });
     child.on('error', err => finish(new Error(err.code === 'ENOENT' ? 'The server is missing yt-dlp. Install it and ensure the yt-dlp command is on PATH.' : 'Could not start the media downloader.')));
@@ -473,10 +493,12 @@ app.get('/api/media/:token/download', async (req, res) => {
   const outputTemplate = path.join(dir, 'reelflow.%(ext)s');
   let finished = false;
   let downloadRecorded = false;
+  const abortController = new AbortController();
 
   const cleanup = async () => { 
     if (finished) return; 
     finished = true; 
+    abortController.abort();
     activeDownloads = Math.max(0, activeDownloads - 1); 
     await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {}); 
   };
@@ -499,7 +521,11 @@ app.get('/api/media/:token/download', async (req, res) => {
   });
 
   try {
-    await runYtDlp(['--no-warnings', '--no-playlist', '--no-part', '--merge-output-format', 'mp4', '--max-filesize', String(MAX_DOWNLOAD_BYTES), '--socket-timeout', '12', '--retries', '1', '-f', formatForQuality(req.query.quality), '-o', outputTemplate, '--', job.url], 120_000);
+    await runYtDlp(
+      ['--no-warnings', '--no-playlist', '--no-part', '--merge-output-format', 'mp4', '--max-filesize', String(MAX_DOWNLOAD_BYTES), '--socket-timeout', '12', '--retries', '1', '-f', formatForQuality(req.query.quality), '-o', outputTemplate, '--', job.url], 
+      120_000, 
+      abortController.signal
+    );
     const files = await fs.promises.readdir(dir);
     const filename = files.find(name => /^reelflow\.[a-zA-Z0-9]{1,8}$/.test(name));
     if (!filename) throw new Error('No video file was produced. The Reel may be unavailable or restricted.');
