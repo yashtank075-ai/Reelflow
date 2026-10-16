@@ -516,7 +516,7 @@ app.get('/sitemap.xml', (req, res) => {
   res.sendFile(path.join(clientDist, 'sitemap.xml'), (err) => {
     if (err) {
       res.type('application/xml').send(
-        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://reelflow-fq7d.onrender.com/</loc>\n    <lastmod>2026-10-16</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n`
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://reelflow-fq7d.onrender.com/</loc>\n    <lastmod>2026-10-16</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n  <url>\n    <loc>https://reelflow-fq7d.onrender.com/privacy</loc>\n    <lastmod>2026-10-16</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n  <url>\n    <loc>https://reelflow-fq7d.onrender.com/terms</loc>\n    <lastmod>2026-10-16</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n  <url>\n    <loc>https://reelflow-fq7d.onrender.com/contact</loc>\n    <lastmod>2026-10-16</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.7</priority>\n  </url>\n</urlset>\n`
       );
     }
   });

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   ArrowDownToLine, 
   ArrowUpRight, 
@@ -17,7 +17,13 @@ import {
   HardDrive, 
   RotateCw,
   Lock,
-  Smartphone
+  Smartphone,
+  Info,
+  ExternalLink,
+  ChevronRight,
+  ArrowLeft,
+  Mail,
+  FileText
 } from 'lucide-react';
 
 import AdminAnalytics from './AdminAnalytics.jsx';
@@ -40,10 +46,18 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+function getInitialPage() {
+  const path = window.location.pathname.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  if (path.startsWith('/admin') || hash === '#admin') return 'admin';
+  if (path === '/privacy' || hash === '#privacy') return 'privacy';
+  if (path === '/terms' || hash === '#terms') return 'terms';
+  if (path === '/contact' || hash === '#contact') return 'contact';
+  return 'home';
+}
+
 export default function App() {
-  const [isAdminView, setIsAdminView] = useState(() => {
-    return window.location.pathname.startsWith('/admin') || window.location.hash === '#admin';
-  });
+  const [currentPage, setCurrentPage] = useState(getInitialPage);
 
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -54,24 +68,55 @@ export default function App() {
   const [quality, setQuality] = useState('best');
   const [thumbError, setThumbError] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); // 'privacy' | 'terms' | 'contact'
+  const [activeModal, setActiveModal] = useState(null); // Quick drawer/modal if opened in-place
   const inputRef = useRef(null);
 
-  // Synchronize browser history/hash changes
-  useState(() => {
+  // Synchronize browser history & page titles
+  useEffect(() => {
     const handlePop = () => {
-      setIsAdminView(window.location.pathname.startsWith('/admin') || window.location.hash === '#admin');
+      setCurrentPage(getInitialPage());
     };
     window.addEventListener('popstate', handlePop);
     window.addEventListener('hashchange', handlePop);
-  });
+    return () => {
+      window.removeEventListener('popstate', handlePop);
+      window.removeEventListener('hashchange', handlePop);
+    };
+  }, []);
 
-  if (isAdminView) {
+  useEffect(() => {
+    switch (currentPage) {
+      case 'privacy':
+        document.title = 'Privacy Policy — ReelFlow';
+        break;
+      case 'terms':
+        document.title = 'Terms of Use — ReelFlow';
+        break;
+      case 'contact':
+        document.title = 'Contact & Support — ReelFlow';
+        break;
+      case 'admin':
+        document.title = 'Admin Analytics — ReelFlow';
+        break;
+      default:
+        document.title = 'ReelFlow — Download Instagram Reels & Facebook Videos';
+    }
+  }, [currentPage]);
+
+  function navigateTo(page, e) {
+    if (e) e.preventDefault();
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const targetPath = page === 'home' ? '/' : `/${page}`;
+    window.history.pushState({}, '', targetPath);
+  }
+
+  if (currentPage === 'admin') {
     return (
       <div className="app-shell">
         <header className="topbar">
           <div className="wrap nav-container">
-            <a className="brand" href="/" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/'); setIsAdminView(false); }} aria-label="ReelFlow Home">
+            <a className="brand" href="/" onClick={(e) => navigateTo('home', e)} aria-label="ReelFlow Home">
               <span className="brand-mark">
                 <Clapperboard size={19} />
               </span>
@@ -86,10 +131,187 @@ export default function App() {
           </div>
         </header>
 
-        <AdminAnalytics onBack={() => {
-          window.history.pushState({}, '', '/');
-          setIsAdminView(false);
-        }} />
+        <AdminAnalytics onBack={() => navigateTo('home')} />
+      </div>
+    );
+  }
+
+  if (currentPage === 'privacy' || currentPage === 'terms' || currentPage === 'contact') {
+    return (
+      <div className="app-shell">
+        <header className="topbar legal-topbar">
+          <div className="wrap nav-container">
+            <a className="brand" href="/" aria-label="ReelFlow Home">
+              <span className="brand-mark">
+                <Clapperboard size={18} />
+              </span>
+              <span>
+                reelflow<span className="brand-dot">.</span>
+              </span>
+            </a>
+
+            <a className="nav-back-button" href="/" aria-label="Back to Downloader">
+              <ArrowLeft size={14} className="nav-back-icon" />
+              <span>Back to Downloader</span>
+            </a>
+          </div>
+        </header>
+
+        <main className="legal-page-overlay">
+          <div className="wrap legal-page-wrap">
+            <div className="legal-page-card">
+              <div className="legal-page-header">
+                <h2>
+                  {currentPage === 'privacy' && 'Privacy Policy'}
+                  {currentPage === 'terms' && 'Terms of Service'}
+                  {currentPage === 'contact' && 'Contact & Support'}
+                </h2>
+                <p className="legal-page-sub">
+                  {currentPage === 'privacy' && 'Last updated: October 2026 · Committed to zero personal data logging'}
+                  {currentPage === 'terms' && 'Last updated: October 2026 · Conditions for responsible personal use'}
+                  {currentPage === 'contact' && 'Direct developer support and inquiries'}
+                </p>
+              </div>
+
+              <div className="legal-page-body">
+                {currentPage === 'privacy' && (
+                  <>
+                    <section className="legal-section">
+                      <h3>1. Zero Personal Data Collection</h3>
+                      <p>
+                        ReelFlow does not require accounts, user registrations, cookies, or social-media passwords. We do not store, track, or inspect your personal credentials or visitor IP addresses.
+                      </p>
+                    </section>
+
+                    <section className="legal-section">
+                      <h3>2. Transient Media Processing</h3>
+                      <p>
+                        When you submit a public Instagram Reel or Facebook video link:
+                      </p>
+                      <ul>
+                        <li>The link is validated strictly against platform allowlists and sent to the yt-dlp media extraction engine.</li>
+                        <li>Temporary video files created during multiplexing are streamed directly to your browser and <strong>purged immediately</strong> from server disks upon stream finish or client disconnect.</li>
+                        <li>Download tokens are generated in volatile memory with short 15-minute expirations and are never saved to persistent storage.</li>
+                      </ul>
+                    </section>
+
+                    <section className="legal-section">
+                      <h3>3. Privacy-First Operational Analytics</h3>
+                      <p>
+                        Our operational dashboard monitors aggregate system health only (such as total lookups, download success rates, generic error categories, and rate limits). Raw video URLs, titles, media files, and visitor IP addresses are never recorded. Operational events older than 30 days are automatically deleted by a daily retention cleanup task.
+                      </p>
+                    </section>
+
+                    <section className="legal-section">
+                      <h3>4. Third-Party Media</h3>
+                      <p>
+                        Media files are retrieved transiently from public servers operated by Meta/Instagram. ReelFlow does not host, index, or store video content on its servers.
+                      </p>
+                    </section>
+                  </>
+                )}
+
+                {currentPage === 'terms' && (
+                  <>
+                    <section className="legal-section">
+                      <h3>1. Acceptance of Terms</h3>
+                      <p>
+                        By accessing ReelFlow (https://reelflow-fq7d.onrender.com/), you agree to use this utility in full compliance with all applicable copyright and intellectual property laws.
+                      </p>
+                    </section>
+
+                    <section className="legal-section">
+                      <h3>2. Permitted Use</h3>
+                      <p>
+                        ReelFlow is provided strictly for personal, non-commercial archiving, research, and fair-use viewing of content you own or for which you have explicit permission from the rights holder.
+                      </p>
+                    </section>
+
+                    <section className="legal-section">
+                      <h3>3. Prohibited Conduct</h3>
+                      <ul>
+                        <li>Do not use automated bots, scrapers, or flood scripts to abuse or overload the ReelFlow infrastructure.</li>
+                        <li>Do not attempt to bypass login screens, paywalls, or privacy controls. ReelFlow refuses requests for private, age-restricted, or login-gated videos.</li>
+                        <li>Do not redistribute copyrighted media without permission from its original creators.</li>
+                      </ul>
+                    </section>
+
+                    <section className="legal-section">
+                      <h3>4. Service Availability &amp; Disclaimer</h3>
+                      <p>
+                        ReelFlow is provided "as is" and "as available". We do not guarantee uninterrupted access or format availability, as third-party platform delivery mechanisms are subject to change without notice. ReelFlow is an independent utility and is not affiliated with, authorized, or endorsed by Meta, Instagram, or Facebook.
+                      </p>
+                    </section>
+                  </>
+                )}
+
+                {currentPage === 'contact' && (
+                  <>
+                    <section className="legal-section">
+                      <h3>Get in Touch</h3>
+                      <p>
+                        For technical feedback, bug reports regarding specific public link structures, or DMCA/content inquiries, you can reach out via the administrator mailbox:
+                      </p>
+                      
+                      <div className="contact-box">
+                        <div className="contact-item">
+                          <Mail size={18} />
+                          <div>
+                            <strong>Email Inquiries</strong>
+                            <p>support@reelflow.app (or submit an issue via the project repository)</p>
+                          </div>
+                        </div>
+                        <div className="contact-item">
+                          <ShieldCheck size={18} />
+                          <div>
+                            <strong>Response Time</strong>
+                            <p>Typically 24 to 48 business hours for verified inquiries</p>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="legal-section">
+                      <h3>Content Inquiries &amp; Rights Owners</h3>
+                      <p>
+                        ReelFlow does not host media or operate persistent media databases. All downloads are real-time transient streams from the respective host platform. If you wish to make content inaccessible, ensure the video privacy is set to private or restricted on the host platform.
+                      </p>
+                    </section>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <footer className="footer wrap">
+          <div className="footer-top">
+            <a className="brand" href="/" aria-label="ReelFlow Home">
+              <span className="brand-mark">
+                <Clapperboard size={16} />
+              </span>
+              <span>
+                reelflow<span className="brand-dot">.</span>
+              </span>
+            </a>
+
+            <div className="footer-nav">
+              <a className="footer-link" href="https://reelflow-fq7d.onrender.com/privacy" target="_blank" rel="noopener noreferrer">
+                Privacy Policy
+              </a>
+              <a className="footer-link" href="https://reelflow-fq7d.onrender.com/terms" target="_blank" rel="noopener noreferrer">
+                Terms of Service
+              </a>
+              <a className="footer-link" href="https://reelflow-fq7d.onrender.com/contact" target="_blank" rel="noopener noreferrer">
+                Contact
+              </a>
+            </div>
+          </div>
+
+          <p className="footer-disclaimer">
+            Independent utility. Not affiliated with Instagram, Facebook, or Meta. Download only public media you own or have permission from its rights holder to save. Respect copyright law and platform guidelines.
+          </p>
+        </footer>
       </div>
     );
   }
@@ -351,6 +573,23 @@ export default function App() {
             </div>
           </div>
 
+          {/* Loading Skeleton */}
+          {loading && (
+            <div className="result-card skeleton-card" aria-busy="true" aria-label="Loading video information">
+              <div className="skeleton-line title" />
+              <div className="result-content">
+                <div className="reel-thumb skeleton-box" />
+                <div className="result-info">
+                  <div className="skeleton-line badge" />
+                  <div className="skeleton-line heading" />
+                  <div className="skeleton-line desc" />
+                  <div className="skeleton-line select" />
+                  <div className="skeleton-line btn" />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Feedback & Result Blocks */}
           {error && (
             <div className="alert error" role="alert">
@@ -375,7 +614,7 @@ export default function App() {
           )}
 
           {/* Premium Result Card */}
-          {result && (
+          {result && !loading && (
             <section className="result-card">
               <div className="result-head">
                 <div>
@@ -647,15 +886,30 @@ export default function App() {
           </a>
 
           <div className="footer-nav">
-            <button type="button" className="footer-link-btn" onClick={() => setActiveModal('privacy')}>
+            <a 
+              className="footer-link" 
+              href="https://reelflow-fq7d.onrender.com/privacy" 
+              target="_blank" 
+              rel="noopener noreferrer"
+            >
               Privacy Policy
-            </button>
-            <button type="button" className="footer-link-btn" onClick={() => setActiveModal('terms')}>
-              Terms of Use
-            </button>
-            <button type="button" className="footer-link-btn" onClick={() => setActiveModal('contact')}>
+            </a>
+            <a 
+              className="footer-link" 
+              href="https://reelflow-fq7d.onrender.com/terms" 
+              target="_blank" 
+              rel="noopener noreferrer"
+            >
+              Terms of Service
+            </a>
+            <a 
+              className="footer-link" 
+              href="https://reelflow-fq7d.onrender.com/contact" 
+              target="_blank" 
+              rel="noopener noreferrer"
+            >
               Contact
-            </button>
+            </a>
           </div>
         </div>
 
@@ -663,64 +917,6 @@ export default function App() {
           Independent utility. Not affiliated with Instagram, Facebook, or Meta. Download only public media you own or have permission from its rights holder to save. Respect copyright law and platform guidelines.
         </p>
       </footer>
-
-      {/* Accessible Modals for Privacy, Terms & Contact */}
-      {activeModal && (
-        <div className="modal-overlay" onClick={() => setActiveModal(null)} role="dialog" aria-modal="true">
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>
-                {activeModal === 'privacy' && 'Privacy Policy'}
-                {activeModal === 'terms' && 'Terms of Use'}
-                {activeModal === 'contact' && 'Contact & Support'}
-              </h3>
-              <button 
-                type="button" 
-                className="modal-close-btn" 
-                onClick={() => setActiveModal(null)}
-                aria-label="Close dialog"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              {activeModal === 'privacy' && (
-                <>
-                  <p>ReelFlow is built with strict privacy standards:</p>
-                  <ul>
-                    <li>We do not require or ask for your Instagram, Facebook, or social passwords or tokens.</li>
-                    <li>We do not track your personal identity or sell your browsing history.</li>
-                    <li>Temporary download files are purged immediately from server storage once streaming completes.</li>
-                    <li>Download tokens are generated in volatile memory with short 15-minute expirations.</li>
-                  </ul>
-                  <p>All interactions with public media links adhere to open metadata inspections.</p>
-                </>
-              )}
-
-              {activeModal === 'terms' && (
-                <>
-                  <p>By using ReelFlow, you agree to the following conditions:</p>
-                  <ul>
-                    <li>You will only download public content for personal, non-commercial use, or content for which you own the copyright or have explicit permission.</li>
-                    <li>You will not use automated scrapers to abuse or overload the service.</li>
-                    <li>ReelFlow provides media access as-is, subject to upstream platform availability.</li>
-                    <li>ReelFlow is an independent project and is not sponsored by or affiliated with Instagram or Meta.</li>
-                  </ul>
-                </>
-              )}
-
-              {activeModal === 'contact' && (
-                <>
-                  <p>Have questions, suggestions, or reports?</p>
-                  <p>ReelFlow is an open developer utility. If you experience issues with specific link formats or wish to report a concern, reach out to the project administrator or consult the project repository documentation.</p>
-                  <p style={{ marginTop: '14px', color: 'var(--text-muted)' }}>Response time is typically within 24–48 hours for verified inquiries.</p>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

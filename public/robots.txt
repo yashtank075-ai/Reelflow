@@ -2,6 +2,9 @@
 User-agent: *
 Allow: /
 Allow: /index.html
+Allow: /privacy
+Allow: /terms
+Allow: /contact
 Allow: /assets/
 Allow: /og-image.jpg
 Allow: /robots.txt
