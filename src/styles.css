@@ -197,7 +197,7 @@ body {
 .nav-link {
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 0.82rem;
+  font-size: 0.9rem; /* ~14.4px comfortable nav links */
   font-weight: 500;
   letter-spacing: -0.01em;
   transition: color 0.18s ease;
@@ -416,7 +416,7 @@ body {
   border: 1px solid rgba(168, 85, 247, 0.45);
   box-shadow: 0 0 16px rgba(168, 85, 247, 0.25), inset 0 0 12px rgba(168, 85, 247, 0.1);
   color: #e9d5ff;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -425,12 +425,13 @@ body {
 
 .hero h1 {
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-size: clamp(2.25rem, 4.5vw, 2.85rem); /* 36px–46px desktop target (38–48px range) */
   font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  margin-bottom: 16px;
-  max-width: 780px;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  margin-bottom: 18px;
+  max-width: 820px;
+  overflow-wrap: break-word;
 }
 
 .hero h1 span {
@@ -441,11 +442,11 @@ body {
 }
 
 .hero-copy {
-  max-width: 600px;
-  margin: 0 auto 28px;
-  color: var(--text-muted);
-  font-size: clamp(0.95rem, 1.8vw, 1.05rem);
-  line-height: 1.65;
+  max-width: 640px;
+  margin: 0 auto 30px;
+  color: var(--text-secondary);
+  font-size: clamp(0.95rem, 1.6vw, 1.05rem); /* 15px - 16.8px comfortable reading */
+  line-height: 1.68;
 }
 
 .platform-chips {
@@ -453,7 +454,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 24px;
+  margin-bottom: 26px;
   flex-wrap: wrap;
 }
 
@@ -461,9 +462,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.75rem;
+  font-size: 0.8rem; /* 12.8px readable pill */
   font-weight: 600;
-  padding: 5px 12px;
+  padding: 6px 14px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-subtle);
@@ -658,7 +659,7 @@ body {
   background: transparent;
   color: var(--text-main);
   font-family: var(--font-body);
-  font-size: 0.96rem;
+  font-size: 1rem; /* 16px clear input */
   font-weight: 500;
   padding: 12px 0;
 }
@@ -681,8 +682,8 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
-  padding: 6px 12px;
-  font-size: 0.78rem;
+  padding: 7px 13px;
+  font-size: 0.84rem; /* ~13.5px */
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
@@ -709,13 +710,14 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 13px 22px;
+  padding: 13px 24px;
   border-radius: var(--radius-lg);
   border: none;
   cursor: pointer;
   font-family: var(--font-body);
-  font-size: 0.92rem;
+  font-size: 0.95rem; /* ~15.2px comfortable button */
   font-weight: 600;
+  letter-spacing: -0.01em;
   text-decoration: none;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
@@ -766,15 +768,16 @@ body {
 
 .input-caption {
   max-width: 740px;
-  margin: 12px auto 0;
+  margin: 14px auto 0;
   padding: 0 4px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--text-dim);
-  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-size: 0.84rem; /* 13.5px metadata/caption */
   font-weight: 500;
+  line-height: 1.5;
 }
 
 .input-caption span {
@@ -787,12 +790,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 22px;
+  gap: 24px;
   flex-wrap: wrap;
-  margin-top: 32px;
-  color: var(--text-muted);
-  font-size: 0.82rem;
+  margin-top: 36px;
+  color: var(--text-secondary);
+  font-size: 0.86rem; /* 13.8px */
   font-weight: 500;
+  line-height: 1.5;
 }
 
 .trust-row span {
@@ -1583,38 +1587,39 @@ body {
    Clean Sections (No horizontal translucent lines/stripes)
    ========================================================================== */
 .section {
-  padding: 64px 0 72px;
+  padding: 68px 0 76px;
   /* Clean solid background flow without horizontal border bars */
 }
 
 .section-heading {
   text-align: center;
-  max-width: 620px;
-  margin: 0 auto 40px;
+  max-width: 640px;
+  margin: 0 auto 44px;
 }
 
 .section-heading h2 {
   font-family: var(--font-display);
-  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  font-size: clamp(1.85rem, 3.2vw, 2.15rem); /* 30px–34px desktop range */
   font-weight: 700;
-  line-height: 1.2;
-  margin: 8px 0 12px;
+  line-height: 1.25;
+  margin: 10px 0 14px;
   letter-spacing: -0.02em;
 }
 
 .section-heading p {
-  color: var(--text-muted);
-  font-size: 0.92rem;
+  color: var(--text-secondary);
+  font-size: clamp(0.95rem, 1.4vw, 1.02rem); /* 15px–16px body text */
+  line-height: 1.65;
 }
 
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: 20px;
 }
 
 .feature-card {
-  padding: 24px 22px;
+  padding: 26px 24px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   border-radius: var(--radius-lg);
@@ -1630,8 +1635,8 @@ body {
 }
 
 .feature-icon {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   display: grid;
   place-items: center;
   border-radius: var(--radius-md);
@@ -1639,36 +1644,38 @@ body {
   border: 1px solid rgba(168, 85, 247, 0.35);
   color: #c084fc;
   box-shadow: 0 0 12px rgba(168, 85, 247, 0.2);
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .feature-card h3 {
   font-family: var(--font-display);
-  font-size: 1.1rem;
+  font-size: 1.15rem; /* ~18.4px card heading (17-19px spec) */
   font-weight: 700;
-  margin: 0 0 8px;
+  letter-spacing: -0.015em;
+  margin: 0 0 10px;
+  color: var(--text-main);
 }
 
 .feature-card p {
   color: var(--text-muted);
-  font-size: 0.88rem;
-  line-height: 1.6;
+  font-size: 0.95rem; /* 15.2px descriptive text */
+  line-height: 1.65;
 }
 
 /* How It Works (Clean flow without horizontal stripe borders) */
 .how-section {
-  padding: 64px 0 72px;
+  padding: 68px 0 76px;
 }
 
 .steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  gap: 22px;
 }
 
 .step-card {
   text-align: center;
-  padding: 24px 20px;
+  padding: 26px 22px;
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -1681,8 +1688,8 @@ body {
 }
 
 .step-number {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(168, 85, 247, 0.45);
@@ -1692,21 +1699,23 @@ body {
   font-family: var(--font-display);
   font-weight: 700;
   margin: 0 auto 16px;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   box-shadow: 0 0 14px rgba(168, 85, 247, 0.35);
 }
 
 .step-card h3 {
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: 1.15rem; /* ~18.4px card heading (17-19px spec) */
   font-weight: 700;
-  margin: 0 0 6px;
+  letter-spacing: -0.015em;
+  margin: 0 0 8px;
+  color: var(--text-main);
 }
 
 .step-card p {
   color: var(--text-muted);
-  font-size: 0.86rem;
-  line-height: 1.55;
+  font-size: 0.94rem; /* ~15px body text */
+  line-height: 1.62;
 }
 
 /* ==========================================================================
@@ -1749,16 +1758,17 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 22px;
+  padding: 20px 24px;
   background: transparent;
   border: none;
   color: var(--text-main);
   text-align: left;
   cursor: pointer;
   font-family: var(--font-body);
-  font-size: 0.98rem;
+  font-size: 1.02rem; /* 16px - 16.5px comfortable question sizing */
   font-weight: 600;
   letter-spacing: -0.01em;
+  line-height: 1.45;
   transition: color 0.18s ease;
   user-select: none;
 }
@@ -1824,11 +1834,11 @@ body {
 }
 
 .faq-accordion-content p {
-  padding: 0 22px 20px 22px;
+  padding: 0 24px 22px 24px;
   margin: 0;
   color: var(--text-secondary);
-  font-size: 0.88rem;
-  line-height: 1.68;
+  font-size: 0.95rem; /* 15.2px comfortable reading */
+  line-height: 1.72;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1919,10 +1929,10 @@ body {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.92rem; /* 14.7px readable footer links */
   font-weight: 500;
   cursor: pointer;
-  padding: 4px 0;
+  padding: 6px 0;
   text-decoration: none;
   transition: color 0.18s ease;
   display: inline-flex;
@@ -1936,7 +1946,7 @@ body {
 }
 
 .footer .brand {
-  font-size: 1.22rem;
+  font-size: 1.25rem;
   gap: 10px;
 }
 
@@ -1949,21 +1959,21 @@ body {
 .footer-bottom {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 18px;
+  gap: 10px;
+  padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .footer-disclaimer {
-  font-size: 0.78rem;
-  line-height: 1.65;
-  color: var(--text-dim);
+  font-size: 0.82rem; /* 13px disclaimer */
+  line-height: 1.68;
+  color: var(--text-muted);
   max-width: 820px;
   margin: 0;
 }
 
 .footer-copyright {
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   color: var(--text-dim);
   margin: 0;
   font-weight: 500;
@@ -2152,19 +2162,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
 
   .hero h1 {
-    font-size: 2.1rem;
-    line-height: 1.18;
-    margin-bottom: 12px;
+    font-size: clamp(1.85rem, 6vw, 2.3rem);
+    line-height: 1.2;
+    margin-bottom: 14px;
   }
 
   .hero-copy {
-    font-size: 0.88rem;
-    margin-bottom: 20px;
+    font-size: 0.95rem;
+    line-height: 1.62;
+    margin-bottom: 22px;
   }
 
   .platform-chips {
-    gap: 6px;
-    margin-bottom: 18px;
+    gap: 8px;
+    margin-bottom: 20px;
   }
 
   .lookup-form {
@@ -2183,7 +2194,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
 
   .input-wrap input {
-    font-size: 0.94rem;
+    font-size: 0.98rem;
     padding: 10px 0;
   }
 
@@ -2193,13 +2204,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
   .tool-btn {
     padding: 7px 12px;
-    font-size: 0.78rem;
+    font-size: 0.82rem;
   }
 
   .lookup-form .button {
     width: 100%;
     min-height: 48px;
-    font-size: 0.95rem;
+    font-size: 0.98rem;
     border-radius: var(--radius-md);
   }
 
@@ -2207,13 +2218,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
   }
 
   .trust-row {
-    gap: 12px;
-    font-size: 0.75rem;
-    margin-top: 22px;
+    gap: 14px;
+    font-size: 0.82rem;
+    margin-top: 24px;
   }
 
   .result-card {
@@ -2233,7 +2244,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
 
   .section {
-    padding: 44px 0 50px;
+    padding: 48px 0 54px;
+  }
+
+  .section-heading h2 {
+    font-size: clamp(1.6rem, 5vw, 1.95rem);
+  }
+
+  .section-heading p {
+    font-size: 0.94rem;
   }
 
   .feature-grid, .steps {
@@ -2241,14 +2260,35 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     gap: 14px;
   }
 
-  .footer-top {
-    flex-direction: column;
-    align-items: flex-start;
+  .feature-card p,
+  .step-card p {
+    font-size: 0.92rem;
+  }
+
+  .faq-accordion-trigger {
+    padding: 16px 18px;
+    font-size: 0.96rem;
     gap: 12px;
   }
 
-  .footer-nav {
+  .faq-accordion-content p {
+    padding: 0 18px 18px 18px;
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .footer-top {
+    flex-direction: column;
+    align-items: flex-start;
     gap: 14px;
+  }
+
+  .footer-nav {
+    gap: 16px;
+  }
+
+  .footer-link {
+    font-size: 0.88rem;
   }
 }
 
