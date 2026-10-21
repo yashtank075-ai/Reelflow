@@ -153,7 +153,7 @@ export default function App() {
         document.title = 'Admin Analytics — ReelFlow';
         break;
       default:
-        document.title = 'ReelFlow — Download Instagram Reels & Facebook Videos';
+        document.title = 'ReelFlow — Download Instagram Reels, Facebook Videos & Preview YouTube Links';
     }
   }, [currentPage]);
 
@@ -626,23 +626,23 @@ export default function App() {
           </div>
 
           <h1>
-            Download Instagram Reels &amp;<br />
-            <span>Facebook Videos Fast.</span>
+            Download Instagram Reels, Facebook Videos &amp;<br />
+            <span>Preview YouTube Links.</span>
           </h1>
 
           <p className="hero-copy">
-            Save publicly accessible Instagram Reels and Facebook videos with ReelFlow. Choose an available video quality and download supported videos easily.
+            Save publicly accessible Instagram Reels and Facebook videos in high quality. Enter a supported YouTube link to preview video details and access official creator guidance.
           </p>
 
           <div className="platform-chips">
             <span className="platform-chip instagram">
-              <Sparkles size={12} /> Instagram Reels
+              <Sparkles size={12} /> Instagram Reels (Download)
             </span>
             <span className="platform-chip facebook">
-              <Zap size={12} /> Facebook Videos
+              <Zap size={12} /> Facebook Videos (Download)
             </span>
             <span className="platform-chip youtube">
-              <CirclePlay size={12} /> YouTube &amp; Shorts (Link Guidance)
+              <CirclePlay size={12} /> YouTube &amp; Shorts (Preview &amp; Guidance)
             </span>
             <span className="platform-chip">
               <Lock size={12} /> No Password Needed
@@ -1182,19 +1182,19 @@ export default function App() {
               <article className="step-card">
                 <span className="step-number">01</span>
                 <h3>Copy Link</h3>
-                <p>Copy a public Reel or video URL from Instagram or Facebook.</p>
+                <p>Copy a public Reel or video link from Instagram, Facebook, or YouTube.</p>
               </article>
 
               <article className="step-card">
                 <span className="step-number">02</span>
                 <h3>Paste &amp; Fetch</h3>
-                <p>Paste the link above and click "Fetch Media" to retrieve details.</p>
+                <p>Paste the link above and click "Fetch Media" (or "Preview YouTube Video") to inspect details.</p>
               </article>
 
               <article className="step-card">
                 <span className="step-number">03</span>
-                <h3>Download Video</h3>
-                <p>Pick your preferred resolution and save the video directly to your device.</p>
+                <h3>Download or Preview</h3>
+                <p>Download supported Instagram and Facebook videos directly in your chosen resolution, or view official YouTube creator guidance.</p>
               </article>
             </div>
           </div>
@@ -1205,30 +1205,34 @@ export default function App() {
           <div className="section-heading">
             <span className="mini-label">FAQS</span>
             <h2 id="faq-title">Frequently Asked Questions</h2>
-            <p>Everything you need to know about downloading public Instagram Reels and Facebook videos with ReelFlow.</p>
+            <p>Everything you need to know about downloading Instagram Reels, Facebook videos, and previewing YouTube links with ReelFlow.</p>
           </div>
 
           <div className="faq-accordion" role="region" aria-label="Frequently Asked Questions Accordion">
             {[
               {
                 q: "What is ReelFlow?",
-                a: "ReelFlow is a fast, web-based utility designed to download publicly accessible Instagram Reels and Facebook videos. It fetches public stream formats using an optimized media processing pipeline, allowing users to save their favorite public clips directly to their device in clean MP4 format without installing apps or browser extensions."
+                a: "ReelFlow is a fast, web-based media utility designed to download publicly accessible Instagram Reels and Facebook videos in clean MP4 format, and to preview supported YouTube video links with verified metadata and official creator guidance. It works entirely in your browser without requiring account registrations, passwords, or browser extensions."
               },
               {
-                q: "How do I download an Instagram Reel?",
-                a: "Downloading is straightforward in three simple steps: 1) Copy the link of any public Instagram Reel (from the share menu in the Instagram app or your browser address bar); 2) Paste the link into the search bar at the top of ReelFlow and click 'Find Video'; 3) Once the video preview and available resolutions appear, select your preferred quality and click 'Download MP4'."
+                q: "How do I download an Instagram Reel or Facebook video?",
+                a: "Downloading is straightforward in three simple steps: 1) Copy the link of any public Instagram Reel or Facebook video; 2) Paste the link into the search bar at the top of ReelFlow and click 'Fetch Media'; 3) Once the media preview and available resolutions appear, select your preferred quality and click 'Download MP4'."
               },
               {
                 q: "Can I download Facebook videos?",
                 a: "Yes. ReelFlow supports standard public Facebook video posts, Facebook Watch clips, and public Facebook Reels. Simply copy the public link from Facebook, paste it into the downloader, and retrieve the video."
               },
               {
-                q: "Can I choose video quality?",
-                a: "Yes, when multiple formats are supplied by the hosting platform. ReelFlow inspects the media stream and presents available resolutions (such as Original/Best, 1080p, 720p, or 480p). Note that quality options depend strictly on what the source video was originally uploaded with and what the platform exposes publicly."
+                q: "Can I preview YouTube videos on ReelFlow?",
+                a: "Yes. When you paste a supported public YouTube link (including youtube.com/watch, youtu.be, and YouTube Shorts), ReelFlow fetches verified video metadata, title, author, and thumbnail, displaying a clear 'YouTube Preview'. Direct downloading is not available in this workflow in order to respect copyright and YouTube platform terms; creators can access official tools via YouTube Studio, and viewers are guided to official YouTube offline features."
               },
               {
-                q: "Do I need to log in to Instagram or Facebook?",
-                a: "No. ReelFlow never asks for your Instagram or Facebook credentials, passwords, session cookies, or personal accounts. It is entirely anonymous and interacts only with publicly accessible URLs."
+                q: "Can I choose video quality?",
+                a: "Yes, for downloadable Instagram and Facebook media when multiple formats are supplied by the hosting platform. ReelFlow inspects the media stream and presents available resolutions (such as Original/Best, 1080p, 720p, or 480p). Note that quality options depend strictly on what the source video was originally uploaded with and what the platform exposes publicly."
+              },
+              {
+                q: "Do I need to log in to Instagram, Facebook, or YouTube?",
+                a: "No. ReelFlow never asks for your Instagram, Facebook, or YouTube credentials, passwords, session cookies, or personal accounts. It is entirely anonymous and interacts only with publicly accessible URLs."
               },
               {
                 q: "Why is my video URL not working?",
