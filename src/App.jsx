@@ -168,23 +168,6 @@ export default function App() {
   if (currentPage === 'admin') {
     return (
       <div className="app-shell">
-        <header className="topbar">
-          <div className="wrap nav-container">
-            <a className="brand" href="/" onClick={(e) => navigateTo('home', e)} aria-label="ReelFlow Home">
-              <span className="brand-mark">
-                <Clapperboard size={19} />
-              </span>
-              <span>
-                ReelFlow<span className="brand-dot">.</span>
-              </span>
-            </a>
-            <div className="top-pill">
-              <span className="live-dot" />
-              <span>Admin Console</span>
-            </div>
-          </div>
-        </header>
-
         <AdminAnalytics onBack={() => navigateTo('home')} />
       </div>
     );
@@ -587,6 +570,19 @@ export default function App() {
   const backendResolutions = Array.isArray(result?.resolutions) ? result.resolutions : [];
   const maxDetectedHeight = backendResolutions.length > 0 ? Math.max(...backendResolutions) : null;
 
+  // Platform-aware check for input URL
+  const isYouTubeInput = (() => {
+    const trimmed = url.trim();
+    if (!trimmed) return false;
+    try {
+      const parsed = new URL(trimmed);
+      const host = parsed.hostname.toLowerCase();
+      return ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(host);
+    } catch {
+      return /youtu(\.be|be\.com)/i.test(trimmed);
+    }
+  })();
+
   return (
     <div className="app-shell">
       {/* Top Navbar */}
@@ -703,6 +699,11 @@ export default function App() {
                     <span className="spinner" />
                     <span>Finding…</span>
                   </>
+                ) : isYouTubeInput ? (
+                  <>
+                    <span>Preview YouTube Video</span>
+                    <ArrowUpRight size={17} />
+                  </>
                 ) : (
                   <>
                     <span>Fetch Media</span>
@@ -770,12 +771,12 @@ export default function App() {
                   <span className="mini-label">
                     {result.provider === 'facebook' ? 'FACEBOOK VIDEO' : (result.provider === 'youtube' ? 'YOUTUBE MEDIA' : 'INSTAGRAM REEL')}
                   </span>
-                  <h2>{result.provider === 'youtube' ? 'Video Recognized' : 'Media Ready'}</h2>
+                  <h2>{result.provider === 'youtube' ? 'Video Preview' : 'Media Ready'}</h2>
                 </div>
                 <span className={`status-pill ${result.provider === 'youtube' ? 'policy-pill' : ''}`}>
                   {result.provider === 'youtube' ? (
                     <>
-                      <Info size={14} /> Link Recognized
+                      <Info size={14} /> YouTube Preview
                     </>
                   ) : (
                     <>
@@ -846,7 +847,7 @@ export default function App() {
                         <div>
                           <strong>YouTube Download Policy &amp; Lawful Options</strong>
                           <p>
-                            ReelFlow respects copyright law and YouTube terms. Direct downloading of arbitrary third-party videos is not supported.
+                            ReelFlow respects copyright law and YouTube terms. Direct downloading of arbitrary third-party YouTube videos is not available in this workflow.
                           </p>
                         </div>
                       </div>

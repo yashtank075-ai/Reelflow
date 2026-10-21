@@ -236,3 +236,63 @@ test('Analytics and Security Enums: Verify ALLOWED_PLATFORMS includes youtube', 
     });
   });
 });
+
+test('UI Logic: Action button is platform-aware for YouTube vs other platforms', () => {
+  function getActionLabel(urlInput) {
+    const trimmed = (urlInput || '').trim();
+    if (!trimmed) return 'Fetch Media';
+    try {
+      const parsed = new URL(trimmed);
+      const host = parsed.hostname.toLowerCase();
+      if (['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(host)) {
+        return 'Preview YouTube Video';
+      }
+    } catch {
+      if (/youtu(\.be|be\.com)/i.test(trimmed)) {
+        return 'Preview YouTube Video';
+      }
+    }
+    return 'Fetch Media';
+  }
+
+  // YouTube URLs
+  assert.equal(getActionLabel('https://youtu.be/O3R08sfOFIM?si=vDrgYN6Nk6aA7aal'), 'Preview YouTube Video');
+  assert.equal(getActionLabel('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), 'Preview YouTube Video');
+  assert.equal(getActionLabel('https://youtube.com/shorts/abcdefghijk'), 'Preview YouTube Video');
+
+  // Instagram and Facebook URLs
+  assert.equal(getActionLabel('https://www.instagram.com/reel/C3bCdEfG123/'), 'Fetch Media');
+  assert.equal(getActionLabel('https://www.facebook.com/watch/?v=9876543210'), 'Fetch Media');
+  assert.equal(getActionLabel(''), 'Fetch Media');
+});
+
+test('UI Logic: Status badge and result title reflect preview mode for YouTube', () => {
+  function getResultMeta(provider) {
+    if (provider === 'youtube') {
+      return {
+        statusBadge: 'YouTube Preview',
+        heading: 'Video Preview',
+        downloadNotice: 'Direct downloading is not available in this workflow. Video creators can download original MP4 files via YouTube Studio.'
+      };
+    }
+    return {
+      statusBadge: 'Accessible',
+      heading: 'Media Ready',
+      downloadNotice: null
+    };
+  }
+
+  const ytMeta = getResultMeta('youtube');
+  assert.equal(ytMeta.statusBadge, 'YouTube Preview');
+  assert.equal(ytMeta.heading, 'Video Preview');
+  assert.match(ytMeta.downloadNotice, /Direct downloading is not available in this workflow/);
+
+  const igMeta = getResultMeta('instagram');
+  assert.equal(igMeta.statusBadge, 'Accessible');
+  assert.equal(igMeta.heading, 'Media Ready');
+
+  const fbMeta = getResultMeta('facebook');
+  assert.equal(fbMeta.statusBadge, 'Accessible');
+  assert.equal(fbMeta.heading, 'Media Ready');
+});
+

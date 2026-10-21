@@ -15,7 +15,8 @@ import {
   LogOut,
   Database,
   Layers,
-  Activity
+  Activity,
+  Clapperboard
 } from 'lucide-react';
 
 export default function AdminAnalytics({ onBack }) {
@@ -123,26 +124,44 @@ export default function AdminAnalytics({ onBack }) {
   }
 
   return (
-    <div className="admin-analytics-view wrap">
-      {/* Header Bar */}
-      <div className="admin-header">
-        <button type="button" className="btn-back" onClick={onBack}>
-          <ArrowLeft size={16} />
-          <span>Back to Downloader</span>
-        </button>
-
-        <div className="admin-title-badge">
-          <ShieldCheck size={16} />
-          <span>Privacy-Conscious Analytics</span>
-        </div>
-
-        {authenticated && (
-          <button type="button" className="btn-logout" onClick={handleLogout} title="Logout">
-            <LogOut size={15} />
-            <span>Logout</span>
+    <div className="admin-page-container">
+      {/* Top Navbar */}
+      <header className="topbar admin-topbar">
+        <div className="wrap nav-container">
+          <button type="button" className="brand" onClick={onBack} aria-label="ReelFlow Home" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <span className="brand-mark">
+              <Clapperboard size={18} />
+            </span>
+            <span>
+              ReelFlow<span className="brand-dot">.</span>
+            </span>
           </button>
-        )}
-      </div>
+
+          <div className="admin-nav-actions">
+            <button type="button" className="nav-back-button" onClick={onBack} aria-label="Back to Downloader">
+              <ArrowLeft size={14} className="nav-back-icon" />
+              <span className="btn-text-full">Back to Downloader</span>
+              <span className="btn-text-short">Back</span>
+            </button>
+
+            {authenticated && (
+              <button type="button" className="btn-logout" onClick={handleLogout} title="Logout" aria-label="Logout">
+                <LogOut size={14} />
+                <span className="btn-text-full">Logout</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="admin-analytics-view wrap">
+        {/* Subheader Title & Badge */}
+        <div className="admin-subhead">
+          <div className="admin-title-badge">
+            <ShieldCheck size={15} />
+            <span>Privacy-Conscious Analytics</span>
+          </div>
+        </div>
 
       {/* Login Screen if Unauthenticated */}
       {!authenticated ? (
@@ -344,16 +363,16 @@ export default function AdminAnalytics({ onBack }) {
                     <thead>
                       <tr>
                         <th>Date</th>
-                        <th>Lookups</th>
-                        <th>Completed Downloads</th>
+                        <th style={{ textAlign: 'center' }}>Lookups</th>
+                        <th style={{ textAlign: 'right' }}>Downloads</th>
                       </tr>
                     </thead>
                     <tbody>
                       {analytics.dailyTrends.map(t => (
                         <tr key={t.date}>
                           <td>{t.date}</td>
-                          <td>{t.lookups}</td>
-                          <td><span className="tag-success">{t.downloads}</span></td>
+                          <td style={{ textAlign: 'center' }}>{t.lookups}</td>
+                          <td style={{ textAlign: 'right' }}><span className="tag-success">{t.downloads}</span></td>
                         </tr>
                       ))}
                     </tbody>
@@ -374,14 +393,14 @@ export default function AdminAnalytics({ onBack }) {
                     <thead>
                       <tr>
                         <th>Category</th>
-                        <th>Occurrences</th>
+                        <th style={{ textAlign: 'right' }}>Occurrences</th>
                       </tr>
                     </thead>
                     <tbody>
                       {analytics.topErrors.map(err => (
                         <tr key={err.category}>
                           <td>{err.category}</td>
-                          <td><span className="tag-error">{err.count}</span></td>
+                          <td style={{ textAlign: 'right' }}><span className="tag-error">{err.count}</span></td>
                         </tr>
                       ))}
                     </tbody>
@@ -400,6 +419,7 @@ export default function AdminAnalytics({ onBack }) {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }

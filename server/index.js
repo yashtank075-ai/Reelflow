@@ -476,13 +476,13 @@ app.post('/api/media/lookup', async (req, res) => {
       guidance: {
         isRecognized: true,
         type: 'creator_policy_notice',
-        summary: 'Direct YouTube downloading is restricted to protect creator rights and adhere to platform terms.',
+        summary: 'Direct YouTube downloading is not available in this workflow to protect creator rights and adhere to platform terms.',
         creatorAction: 'If this is your own video, you can download your original MP4 file directly from YouTube Studio.',
         creatorUrl: 'https://studio.youtube.com/',
         viewerAction: 'For offline personal viewing on mobile devices, use YouTube Premium official offline downloads within the YouTube app. YouTube does not provide MP4 file exports for viewer downloads.',
         officialHelpUrl: 'https://support.google.com/youtube/answer/6141269'
       },
-      message: 'YouTube link recognized. Direct third-party downloading is not permitted. Authorized creator downloads are available via YouTube Studio.'
+      message: 'YouTube video recognized. Direct downloading is not available in this workflow. Video creators can download original MP4 files via YouTube Studio.'
     });
   }
 
