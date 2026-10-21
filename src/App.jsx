@@ -50,51 +50,21 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-const HISTORY_STORAGE_KEY = 'reelflow_recent_downloads';
-const MAX_HISTORY_ENTRIES = 20;
+import {
+  HISTORY_STORAGE_KEY,
+  MAX_HISTORY_ENTRIES,
+  loadStoredHistory,
+  persistHistory,
+  clearStoredHistory
+} from './historyStorage.js';
 
-function loadStoredHistory() {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return [];
-    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter(item => item && typeof item === 'object' && typeof item.id === 'string' && typeof item.timestamp === 'number')
-      .slice(0, MAX_HISTORY_ENTRIES);
-  } catch (err) {
-    console.warn('Could not read download history from storage:', err);
-    return [];
-  }
-}
-
-function persistHistory(entries) {
-  if (typeof window === 'undefined' || !window.localStorage) return false;
-  
-  let currentList = entries.slice(0, MAX_HISTORY_ENTRIES);
-  while (currentList.length > 0) {
-    try {
-      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(currentList));
-      return true; // Successfully saved
-    } catch (err) {
-      const isQuotaError = 
-        err.name === 'QuotaExceededError' || 
-        err.name === 'NS_ERROR_DOM_QUOTA_REACHED' || 
-        err.code === 22 || 
-        err.code === 1014;
-
-      if (isQuotaError && currentList.length > 1) {
-        // Evict the oldest entry and retry
-        currentList = currentList.slice(0, currentList.length - 1);
-      } else {
-        console.warn('Could not persist download history (storage full or restricted):', err.message);
-        return false;
-      }
-    }
-  }
-  return false;
-}
+export {
+  HISTORY_STORAGE_KEY,
+  MAX_HISTORY_ENTRIES,
+  loadStoredHistory,
+  persistHistory,
+  clearStoredHistory
+};
 
 function getInitialPage() {
   const path = window.location.pathname.toLowerCase();
@@ -465,8 +435,9 @@ export default function App() {
   }
 
   function clearAllHistory() {
+    clearStoredHistory();
     setDownloadHistory([]);
-    persistHistory([]);
+    setHistoryStorageWarning(false);
     setShowClearConfirm(false);
   }
 
