@@ -148,7 +148,12 @@ export default function App() {
       <div className="app-shell">
         <header className="topbar legal-topbar">
           <div className="wrap nav-container">
-            <a className="brand" href="/" aria-label="ReelFlow Home">
+            <a 
+              className="brand" 
+              href="/" 
+              aria-label="ReelFlow Home"
+              onClick={(e) => { e.preventDefault(); navigateTo('home'); }}
+            >
               <span className="brand-mark">
                 <Clapperboard size={18} />
               </span>
@@ -157,7 +162,12 @@ export default function App() {
               </span>
             </a>
 
-            <a className="nav-back-button" href="/" aria-label="Back to Downloader">
+            <a 
+              className="nav-back-button" 
+              href="/" 
+              aria-label="Back to Downloader"
+              onClick={(e) => { e.preventDefault(); navigateTo('home'); }}
+            >
               <ArrowLeft size={14} className="nav-back-icon" />
               <span>Back to Downloader</span>
             </a>
@@ -291,33 +301,57 @@ export default function App() {
           </div>
         </main>
 
-        <footer className="footer wrap">
-          <div className="footer-top">
-            <a className="brand" href="/" aria-label="ReelFlow Home">
-              <span className="brand-mark">
-                <Clapperboard size={16} />
-              </span>
-              <span>
-                reelflow<span className="brand-dot">.</span>
-              </span>
-            </a>
+        <footer className="footer">
+          <div className="wrap footer-wrap">
+            <div className="footer-top">
+              <a 
+                className="brand" 
+                href="/" 
+                aria-label="ReelFlow Home"
+                onClick={(e) => { e.preventDefault(); navigateTo('home'); }}
+              >
+                <span className="brand-mark">
+                  <Clapperboard size={17} />
+                </span>
+                <span>
+                  ReelFlow<span className="brand-dot">.</span>
+                </span>
+              </a>
 
-            <div className="footer-nav">
-              <a className="footer-link" href="https://reelflow-fq7d.onrender.com/privacy" target="_blank" rel="noopener noreferrer">
-                Privacy Policy
-              </a>
-              <a className="footer-link" href="https://reelflow-fq7d.onrender.com/terms" target="_blank" rel="noopener noreferrer">
-                Terms of Service
-              </a>
-              <a className="footer-link" href="https://reelflow-fq7d.onrender.com/contact" target="_blank" rel="noopener noreferrer">
-                Contact
-              </a>
+              <div className="footer-nav">
+                <a 
+                  className="footer-link" 
+                  href="/privacy" 
+                  onClick={(e) => { e.preventDefault(); navigateTo('privacy'); }}
+                >
+                  Privacy Policy
+                </a>
+                <a 
+                  className="footer-link" 
+                  href="/terms" 
+                  onClick={(e) => { e.preventDefault(); navigateTo('terms'); }}
+                >
+                  Terms of Service
+                </a>
+                <a 
+                  className="footer-link" 
+                  href="/contact" 
+                  onClick={(e) => { e.preventDefault(); navigateTo('contact'); }}
+                >
+                  Contact
+                </a>
+              </div>
+            </div>
+
+            <div className="footer-bottom">
+              <p className="footer-disclaimer">
+                Independent utility. Not affiliated with Instagram, Facebook, or Meta. Download only public media you own or have permission from its rights holder to save. Respect copyright law and platform guidelines.
+              </p>
+              <p className="footer-copyright">
+                © 2026 ReelFlow. All rights reserved.
+              </p>
             </div>
           </div>
-
-          <p className="footer-disclaimer">
-            Independent utility. Not affiliated with Instagram, Facebook, or Meta. Download only public media you own or have permission from its rights holder to save. Respect copyright law and platform guidelines.
-          </p>
         </footer>
       </div>
     );
