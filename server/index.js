@@ -119,10 +119,11 @@ app.use((req, res, next) => {
 
 const INSTAGRAM_HOSTS = new Set(['instagram.com', 'www.instagram.com', 'm.instagram.com']);
 const FACEBOOK_HOSTS = new Set(['facebook.com', 'www.facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch']);
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']);
 const downloadJobs = new Map();
 const JOB_TTL_MS = 15 * 60 * 1000;
 
-function parseMediaPermalink(input) {
+export function parseMediaPermalink(input) {
   let url;
   try { url = new URL(input); } catch { return null; }
   const host = url.hostname.toLowerCase();
@@ -201,6 +202,43 @@ function parseMediaPermalink(input) {
         id: videoId.slice(0, 100),
         canonical: `https://www.facebook.com${normalizedPath}`
       };
+    }
+
+    return null;
+  }
+
+  if (YOUTUBE_HOSTS.has(host)) {
+    // 1. youtu.be shortlink: https://youtu.be/{videoId}
+    if (host === 'youtu.be') {
+      const match = url.pathname.match(/^\/([A-Za-z0-9_-]{11})\/?$/);
+      if (!match) return null;
+      return {
+        provider: 'youtube',
+        id: match[1],
+        canonical: `https://www.youtube.com/watch?v=${match[1]}`
+      };
+    }
+
+    // 2. youtube.com/shorts/{videoId}
+    const shortsMatch = url.pathname.match(/^\/shorts\/([A-Za-z0-9_-]{11})\/?$/i);
+    if (shortsMatch) {
+      return {
+        provider: 'youtube',
+        id: shortsMatch[1],
+        canonical: `https://www.youtube.com/shorts/${shortsMatch[1]}`
+      };
+    }
+
+    // 3. youtube.com/watch?v={videoId}
+    if (/^\/watch\/?$/i.test(url.pathname)) {
+      const vId = url.searchParams.get('v');
+      if (vId && /^[A-Za-z0-9_-]{11}$/.test(vId)) {
+        return {
+          provider: 'youtube',
+          id: vId,
+          canonical: `https://www.youtube.com/watch?v=${vId}`
+        };
+      }
     }
 
     return null;
@@ -371,8 +409,22 @@ app.get('/api/health', (_req, res) => res.json({
   downloader: 'yt-dlp', 
   ffmpeg: Boolean(resolveFfmpegBinary()),
   credentialsRequired: false, 
-  supportedPlatforms: ['instagram', 'facebook'] 
+  supportedPlatforms: ['instagram', 'facebook', 'youtube'] 
 }));
+
+async function fetchYouTubeOEmbed(url) {
+  const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(oEmbedUrl, { signal: controller.signal, headers: { 'User-Agent': 'ReelFlow/1.0' } });
+    clearTimeout(timeout);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
 app.post('/api/media/lookup', async (req, res) => {
   const startTime = Date.now();
@@ -386,7 +438,52 @@ app.post('/api/media/lookup', async (req, res) => {
       durationMs: Date.now() - startTime,
       statusCode: 400
     });
-    return res.status(400).json({ error: 'Enter a supported public Instagram Reel or Facebook video URL.' });
+    return res.status(400).json({ error: 'Enter a supported public Instagram Reel, Facebook video, or YouTube URL.' });
+  }
+
+  // YouTube Compliant Workflow: Official metadata lookup via documented oEmbed API
+  // No scraping, no arbitrary MP4 extraction, no DRM/anti-bot bypass
+  if (parsed.provider === 'youtube') {
+    const oembed = await fetchYouTubeOEmbed(parsed.canonical);
+    recordAnalyticsEvent({
+      eventType: 'lookup',
+      platform: 'youtube',
+      outcome: 'success',
+      durationMs: Date.now() - startTime,
+      statusCode: 200
+    });
+
+    const isShorts = parsed.canonical.includes('/shorts/');
+    const title = oembed?.title || 'YouTube Video';
+    const authorName = oembed?.author_name || '';
+    const thumbnailUrl = oembed?.thumbnail_url || `https://i.ytimg.com/vi/${parsed.id}/hqdefault.jpg`;
+
+    return res.json({
+      id: parsed.id,
+      provider: 'youtube',
+      permalink: parsed.canonical,
+      mediaType: isShorts ? 'YouTube Short' : 'YouTube Video',
+      title: title,
+      caption: authorName ? `By ${authorName} on YouTube` : 'Recognized YouTube media',
+      author: authorName,
+      duration: null,
+      resolutions: [],
+      filesizeBytes: null,
+      timestamp: null,
+      thumbnailUrl: thumbnailUrl,
+      downloadable: false,
+      downloadUrl: null,
+      guidance: {
+        isRecognized: true,
+        type: 'creator_policy_notice',
+        summary: 'Direct YouTube downloading is restricted to protect creator rights and adhere to platform terms.',
+        creatorAction: 'If this is your own video, you can download your original MP4 file directly from YouTube Studio.',
+        creatorUrl: 'https://studio.youtube.com/',
+        viewerAction: 'For offline personal viewing on mobile devices, use YouTube Premium official offline downloads within the YouTube app. YouTube does not provide MP4 file exports for viewer downloads.',
+        officialHelpUrl: 'https://support.google.com/youtube/answer/6141269'
+      },
+      message: 'YouTube link recognized. Direct third-party downloading is not permitted. Authorized creator downloads are available via YouTube Studio.'
+    });
   }
 
   try {

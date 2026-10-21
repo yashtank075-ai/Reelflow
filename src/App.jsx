@@ -417,13 +417,15 @@ export default function App() {
     try {
       parsed = new URL(trimmed);
     } catch {
-      setError('Please paste a valid Instagram Reel or Facebook video URL.');
+      setError('Please paste a valid Instagram Reel, Facebook video, or YouTube URL.');
       return;
     }
 
     const host = parsed.hostname.toLowerCase();
     const instagramHost = ['instagram.com', 'www.instagram.com', 'm.instagram.com'].includes(host);
     const facebookHost = ['facebook.com', 'www.facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch'].includes(host);
+    const youtubeHost = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(host);
+
     const instagramPath = /^\/(reel|reels|p)\/[A-Za-z0-9_-]+\/?$/i.test(parsed.pathname);
     const facebookPath = (
       /^\/(watch|reel|share\/(v|r)|videos)(\/|$)/i.test(parsed.pathname) || 
@@ -435,15 +437,20 @@ export default function App() {
       /\/(videos|reel|share\/(v|r))\/[A-Za-z0-9._-]+/i.test(parsed.pathname) || 
       host === 'fb.watch'
     );
+    const youtubePath = (
+      (host === 'youtu.be' && /^\/[A-Za-z0-9_-]{11}\/?$/.test(parsed.pathname)) ||
+      (host !== 'youtu.be' && /^\/shorts\/[A-Za-z0-9_-]{11}\/?$/i.test(parsed.pathname)) ||
+      (host !== 'youtu.be' && /^\/watch\/?$/i.test(parsed.pathname) && /^[A-Za-z0-9_-]{11}$/.test(parsed.searchParams.get('v') || ''))
+    );
 
     if (
       parsed.protocol !== 'https:' || 
       parsed.username || 
       parsed.password || 
       parsed.port || 
-      (!(instagramHost && instagramPath) && !(facebookHost && facebookPath))
+      (!(instagramHost && instagramPath) && !(facebookHost && facebookPath) && !(youtubeHost && youtubePath))
     ) {
-      setError('Unsupported link. Please paste a public Instagram Reel or Facebook video URL.');
+      setError('Unsupported link. Please paste a public Instagram Reel, Facebook video, or YouTube URL.');
       return;
     }
 
@@ -638,6 +645,9 @@ export default function App() {
             <span className="platform-chip facebook">
               <Zap size={12} /> Facebook Videos
             </span>
+            <span className="platform-chip youtube">
+              <CirclePlay size={12} /> YouTube &amp; Shorts (Link Guidance)
+            </span>
             <span className="platform-chip">
               <Lock size={12} /> No Password Needed
             </span>
@@ -649,7 +659,7 @@ export default function App() {
               <div className="input-wrap">
                 <Link2 size={20} className="input-icon" />
                 <label htmlFor="url-input" className="sr-only">
-                  Instagram Reel or Facebook video URL
+                  Instagram Reel, Facebook, or YouTube video URL
                 </label>
                 <input
                   ref={inputRef}
@@ -657,8 +667,8 @@ export default function App() {
                   type="url"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Paste Instagram Reel or Facebook URL..."
-                  aria-label="Instagram or Facebook video URL"
+                  placeholder="Paste Instagram Reel, Facebook, or YouTube URL..."
+                  aria-label="Instagram, Facebook, or YouTube video URL"
                   aria-describedby="input-desc"
                   required
                 />
@@ -758,12 +768,20 @@ export default function App() {
               <div className="result-head">
                 <div>
                   <span className="mini-label">
-                    {result.provider === 'facebook' ? 'FACEBOOK VIDEO' : 'INSTAGRAM REEL'}
+                    {result.provider === 'facebook' ? 'FACEBOOK VIDEO' : (result.provider === 'youtube' ? 'YOUTUBE MEDIA' : 'INSTAGRAM REEL')}
                   </span>
-                  <h2>Media Ready</h2>
+                  <h2>{result.provider === 'youtube' ? 'Video Recognized' : 'Media Ready'}</h2>
                 </div>
-                <span className="status-pill">
-                  <Check size={14} /> Accessible
+                <span className={`status-pill ${result.provider === 'youtube' ? 'policy-pill' : ''}`}>
+                  {result.provider === 'youtube' ? (
+                    <>
+                      <Info size={14} /> Link Recognized
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} /> Accessible
+                    </>
+                  )}
                 </span>
               </div>
 
@@ -772,18 +790,18 @@ export default function App() {
                   {result.thumbnailUrl && !thumbError ? (
                     <img 
                       src={result.thumbnailUrl} 
-                      alt={result.title || "Reel preview thumbnail"} 
+                      alt={result.title || "Video preview thumbnail"} 
                       loading="lazy" 
                       onError={() => setThumbError(true)}
                     />
                   ) : (
                     <div className="thumb-placeholder">
                       <CirclePlay size={44} />
-                      <span>{result.provider === 'facebook' ? 'FACEBOOK VIDEO' : 'REEL PREVIEW'}</span>
+                      <span>{result.provider === 'facebook' ? 'FACEBOOK VIDEO' : (result.provider === 'youtube' ? 'YOUTUBE VIDEO' : 'REEL PREVIEW')}</span>
                     </div>
                   )}
                   <span className="thumb-badge">
-                    {result.provider === 'facebook' ? 'Facebook' : 'Reel'}
+                    {result.provider === 'facebook' ? 'Facebook' : (result.provider === 'youtube' ? 'YouTube' : 'Reel')}
                   </span>
                 </div>
 
@@ -791,16 +809,18 @@ export default function App() {
                   {/* Verified Metadata Badges */}
                   <div className="meta-badges">
                     <span className="meta-badge">
-                      {result.provider === 'facebook' ? 'Facebook Video' : 'Instagram Reel'}
+                      {result.provider === 'facebook' ? 'Facebook Video' : (result.provider === 'youtube' ? (result.mediaType || 'YouTube Video') : 'Instagram Reel')}
                     </span>
                     {result.duration && (
                       <span className="meta-badge">
                         <Clock size={12} /> {formatDuration(result.duration)}
                       </span>
                     )}
-                    <span className="meta-badge">
-                      <HardDrive size={12} /> {result.filesizeBytes ? `~${formatBytes(result.filesizeBytes)}` : 'Size unavailable'}
-                    </span>
+                    {result.provider !== 'youtube' && (
+                      <span className="meta-badge">
+                        <HardDrive size={12} /> {result.filesizeBytes ? `~${formatBytes(result.filesizeBytes)}` : 'Size unavailable'}
+                      </span>
+                    )}
                     {maxDetectedHeight && (
                       <span className="meta-badge">
                         Up to {maxDetectedHeight}p
@@ -818,77 +838,140 @@ export default function App() {
                     </div>
                   ) : null}
 
-                  {/* Dynamic Video Quality Selector */}
-                  <div className="quality-control">
-                    <label htmlFor="video-quality" className="quality-control-label">
-                      <span>Select Resolution</span>
-                      <small>
-                        {maxDetectedHeight ? `Source max: ${maxDetectedHeight}p` : 'MP4 video stream'}
-                      </small>
-                    </label>
-                    <div className="quality-select-wrapper">
-                      <select
-                        id="video-quality"
-                        value={quality}
-                        onChange={(e) => setQuality(e.target.value)}
-                        disabled={downloading}
-                      >
-                        {standardOptions.map(opt => {
-                          const isUnavailable = maxDetectedHeight && opt.minHeight && opt.minHeight > maxDetectedHeight;
-                          return (
-                            <option 
-                              key={opt.value} 
-                              value={opt.value}
-                              disabled={isUnavailable}
-                            >
-                              {opt.label} {isUnavailable ? '(Not available in source)' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
+                  {/* YouTube Educational Guidance Block */}
+                  {result.provider === 'youtube' ? (
+                    <div className="youtube-guidance-card">
+                      <div className="youtube-guidance-head">
+                        <ShieldCheck size={18} className="guidance-icon" />
+                        <div>
+                          <strong>YouTube Download Policy &amp; Lawful Options</strong>
+                          <p>
+                            ReelFlow respects copyright law and YouTube terms. Direct downloading of arbitrary third-party videos is not supported.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="youtube-guidance-options">
+                        <div className="guidance-option">
+                          <h4>For Video Owners &amp; Creators:</h4>
+                          <p>
+                            If you own this video, you can download your original high-resolution MP4 copy directly via official creator tools.
+                          </p>
+                          <a
+                            href="https://studio.youtube.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="button secondary outline full"
+                          >
+                            <span>Open YouTube Studio</span>
+                            <ArrowUpRight size={14} />
+                          </a>
+                        </div>
+
+                        <div className="guidance-option">
+                          <h4>For Offline Mobile Viewing:</h4>
+                          <p>
+                            YouTube Premium subscribers can save videos for offline viewing within the official YouTube mobile app. Note that offline viewing stays inside the YouTube app and is not an MP4 file export.
+                          </p>
+                          <a
+                            href="https://support.google.com/youtube/answer/6141269"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="guidance-link"
+                          >
+                            <span>Learn about official YouTube downloads</span>
+                            <ChevronRight size={13} />
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="result-actions" style={{ marginTop: '16px' }}>
+                        <a
+                          className="button secondary full"
+                          href={result.permalink}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <span>Watch on YouTube</span>
+                          <ArrowUpRight size={15} />
+                        </a>
+                      </div>
                     </div>
-                    <small>Only resolutions provided by the platform can be retrieved.</small>
-                  </div>
+                  ) : (
+                    <>
+                      {/* Dynamic Video Quality Selector for Instagram & Facebook */}
+                      <div className="quality-control">
+                        <label htmlFor="video-quality" className="quality-control-label">
+                          <span>Select Resolution</span>
+                          <small>
+                            {maxDetectedHeight ? `Source max: ${maxDetectedHeight}p` : 'MP4 video stream'}
+                          </small>
+                        </label>
+                        <div className="quality-select-wrapper">
+                          <select
+                            id="video-quality"
+                            value={quality}
+                            onChange={(e) => setQuality(e.target.value)}
+                            disabled={downloading}
+                          >
+                            {standardOptions.map(opt => {
+                              const isUnavailable = maxDetectedHeight && opt.minHeight && opt.minHeight > maxDetectedHeight;
+                              return (
+                                <option 
+                                  key={opt.value} 
+                                  value={opt.value}
+                                  disabled={isUnavailable}
+                                >
+                                  {opt.label} {isUnavailable ? '(Not available in source)' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        <small>Only resolutions provided by the platform can be retrieved.</small>
+                      </div>
 
-                  <div className="result-actions">
-                    <button
-                      className={`button primary full ${downloadSuccess ? 'success-state' : ''}`}
-                      onClick={downloadVideo}
-                      disabled={!result.downloadable || downloading}
-                    >
-                      {downloading ? (
-                        <>
-                          <span className="spinner" />
-                          <span>Preparing &amp; Downloading…</span>
-                        </>
-                      ) : downloadSuccess ? (
-                        <>
-                          <Check size={18} />
-                          <span>Download Started!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download size={17} />
-                          <span>{result.downloadable ? 'Download MP4' : 'Media Unavailable'}</span>
-                        </>
+                      <div className="result-actions">
+                        <button
+                          className={`button primary full ${downloadSuccess ? 'success-state' : ''}`}
+                          onClick={downloadVideo}
+                          disabled={!result.downloadable || downloading}
+                        >
+                          {downloading ? (
+                            <>
+                              <span className="spinner" />
+                              <span>Preparing &amp; Downloading…</span>
+                            </>
+                          ) : downloadSuccess ? (
+                            <>
+                              <Check size={18} />
+                              <span>Download Started!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download size={17} />
+                              <span>{result.downloadable ? 'Download MP4' : 'Media Unavailable'}</span>
+                            </>
+                          )}
+                        </button>
+
+                        <a
+                          className="button secondary full"
+                          href={result.permalink}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <span>View on {result.provider === 'facebook' ? 'Facebook' : 'Instagram'}</span>
+                          <ArrowUpRight size={15} />
+                        </a>
+                      </div>
+
+                      {!result.downloadable && (
+                        <p className="download-note">
+                          The platform did not provide a downloadable video for this link.
+                        </p>
                       )}
-                    </button>
-
-                    <a
-                      className="button secondary full"
-                      href={result.permalink}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <span>View on {result.provider === 'facebook' ? 'Facebook' : 'Instagram'}</span>
-                      <ArrowUpRight size={15} />
-                    </a>
-                  </div>
-
-                  {!result.downloadable && (
-                    <p className="download-note">
-                      The platform did not provide a downloadable video for this link.
-                    </p>
+                    </>
                   )}
                 </div>
               </div>
@@ -1161,6 +1244,10 @@ export default function App() {
               {
                 q: "Does ReelFlow store my downloaded videos?",
                 a: "No. ReelFlow does not operate a permanent media storage library or database of user downloads. All video processing is transient: media is fetched and streamed directly to your browser, and temporary working files on the server are purged immediately upon stream completion or disconnection. Operational logs record only aggregate system health metrics (like total lookups and success rates) with zero raw video links or visitor IP addresses."
+              },
+              {
+                q: "Why can't I download arbitrary YouTube videos directly?",
+                a: "ReelFlow complies strictly with YouTube terms and copyright laws. YouTube's platform terms prohibit downloading third-party videos without rights holder permission or bypassing access controls. When you paste a YouTube link, ReelFlow recognizes the video and provides lawful options: video creators can download their own MP4 files directly from YouTube Studio, while viewers can use official offline downloads in the YouTube mobile app via YouTube Premium."
               },
               {
                 q: "Is ReelFlow free to use?",

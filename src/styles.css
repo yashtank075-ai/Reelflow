@@ -482,6 +482,119 @@ body {
   background: rgba(96, 165, 250, 0.06);
 }
 
+.platform-chip.youtube {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.25);
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.status-pill.policy-pill {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+}
+
+/* YouTube Educational Guidance Card */
+.youtube-guidance-card {
+  margin-top: 14px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.youtube-guidance-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-main);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.youtube-guidance-head .guidance-icon {
+  color: #fbbf24;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.youtube-guidance-head strong {
+  display: block;
+  font-size: 0.88rem;
+  color: #fbbf24;
+  margin-bottom: 2px;
+}
+
+.youtube-guidance-head p {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.youtube-guidance-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.guidance-option {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+}
+
+.guidance-option h4 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.guidance-option p {
+  font-size: 0.77rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
+.guidance-option p:last-child {
+  margin-bottom: 0;
+}
+
+.guidance-option .button.outline {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+}
+
+.guidance-option .button.outline:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: var(--border-medium);
+}
+
+.guidance-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #60a5fa;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.guidance-link:hover {
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
 /* ==========================================================================
    Downloader Input Box (Prominent & Clean)
    ========================================================================== */
@@ -2524,6 +2637,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .platform-dot.instagram { background: #f472b6; }
 .platform-dot.facebook { background: #60a5fa; }
+.platform-dot.youtube { background: #f87171; }
 
 .platform-count {
   font-size: 0.86rem;

@@ -73,7 +73,7 @@ export async function initAnalyticsDb() {
 
 // Allowed enums for strict data validation (privacy-preserving)
 const ALLOWED_EVENT_TYPES = new Set(['lookup', 'download']);
-const ALLOWED_PLATFORMS = new Set(['instagram', 'facebook', 'unknown']);
+const ALLOWED_PLATFORMS = new Set(['instagram', 'facebook', 'youtube', 'unknown']);
 const ALLOWED_OUTCOMES = new Set(['success', 'failed', 'aborted', 'timeout']);
 
 /**
@@ -191,6 +191,7 @@ async function queryDatabaseAnalytics(since, activeDownloadsCount) {
         COUNT(*) FILTER (WHERE event_type = 'download' AND outcome != 'success') as failed_downloads,
         COUNT(*) FILTER (WHERE platform = 'instagram') as instagram_events,
         COUNT(*) FILTER (WHERE platform = 'facebook') as facebook_events,
+        COUNT(*) FILTER (WHERE platform = 'youtube') as youtube_events,
         AVG(duration_ms) FILTER (WHERE duration_ms IS NOT NULL) as avg_duration_ms
       FROM analytics_events
       WHERE created_at >= $1
@@ -237,6 +238,7 @@ async function queryDatabaseAnalytics(since, activeDownloadsCount) {
         downloadSuccessRate,
         instagramCount: Number(s.instagram_events || 0),
         facebookCount: Number(s.facebook_events || 0),
+        youtubeCount: Number(s.youtube_events || 0),
         avgDurationMs: s.avg_duration_ms ? Math.round(Number(s.avg_duration_ms)) : null,
         rateLimitCount: Number(rlRes.rows[0]?.rate_limit_hits || 0),
         activeDownloads: activeDownloadsCount,
@@ -266,6 +268,7 @@ function queryMemoryAnalytics(since, activeDownloadsCount) {
   let downloadsFailedOrAborted = 0;
   let instagramCount = 0;
   let facebookCount = 0;
+  let youtubeCount = 0;
   let durationSum = 0;
   let durationCount = 0;
 
@@ -275,6 +278,7 @@ function queryMemoryAnalytics(since, activeDownloadsCount) {
   for (const e of events) {
     if (e.platform === 'instagram') instagramCount++;
     if (e.platform === 'facebook') facebookCount++;
+    if (e.platform === 'youtube') youtubeCount++;
 
     if (e.eventType === 'lookup') {
       totalLookups++;
@@ -325,6 +329,7 @@ function queryMemoryAnalytics(since, activeDownloadsCount) {
       downloadSuccessRate,
       instagramCount,
       facebookCount,
+      youtubeCount,
       avgDurationMs,
       rateLimitCount: rlHits,
       activeDownloads: activeDownloadsCount,

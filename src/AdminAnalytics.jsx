@@ -299,6 +299,13 @@ export default function AdminAnalytics({ onBack }) {
                   </div>
                   <span className="platform-count">{analytics?.summary?.facebookCount ?? 0} events</span>
                 </div>
+                <div className="platform-row">
+                  <div className="platform-name">
+                    <span className="platform-dot youtube" />
+                    <span>YouTube</span>
+                  </div>
+                  <span className="platform-count">{analytics?.summary?.youtubeCount ?? 0} events</span>
+                </div>
               </div>
 
               <div className="active-downloads-pill">
