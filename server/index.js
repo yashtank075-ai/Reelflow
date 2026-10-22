@@ -742,7 +742,7 @@ app.get('/robots.txt', (req, res) => {
   res.sendFile(path.join(clientDist, 'robots.txt'), (err) => {
     if (err) {
       res.type('text/plain').send(
-        `User-agent: *\nAllow: /\nAllow: /assets/\nAllow: /og-image.jpg\nDisallow: /admin\nDisallow: /admin/\nDisallow: /api/admin\nDisallow: /api/admin/\nDisallow: /api/media/download\n\nSitemap: https://reelflow-fq7d.onrender.com/sitemap.xml\n`
+        `User-agent: *\nAllow: /\nAllow: /privacy\nAllow: /terms\nAllow: /contact\nAllow: /assets/\nAllow: /og-image.jpg\nDisallow: /admin\nDisallow: /admin/\nDisallow: /api/admin\nDisallow: /api/admin/\nDisallow: /api/media/download\n\nSitemap: https://reelflow-fq7d.onrender.com/sitemap.xml\n`
       );
     }
   });

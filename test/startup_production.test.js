@@ -84,6 +84,26 @@ test('Production Server: Express server starts, binds to PORT, and remains runni
     assert.equal(res.status, 200, 'HTTP response on assigned PORT should be 200');
     const body = await res.json();
     assert.equal(typeof body.authenticated, 'boolean');
+
+    // Verify /robots.txt content and public route allowance
+    const robotsRes = await fetch(`http://localhost:${testPort}/robots.txt`);
+    assert.equal(robotsRes.status, 200);
+    const robotsText = await robotsRes.text();
+    assert.ok(robotsText.includes('Allow: /terms'), 'robots.txt must allow /terms');
+    assert.ok(robotsText.includes('Allow: /contact'), 'robots.txt must allow /contact');
+    assert.ok(robotsText.includes('Allow: /privacy'), 'robots.txt must allow /privacy');
+    assert.ok(robotsText.includes('Allow: /'), 'robots.txt must allow /');
+    assert.ok(!robotsText.includes('Disallow: /terms'), 'robots.txt must not disallow /terms');
+    assert.ok(!robotsText.includes('Disallow: /contact'), 'robots.txt must not disallow /contact');
+    assert.ok(robotsText.includes('Sitemap: https://reelflow-fq7d.onrender.com/sitemap.xml'), 'robots.txt must reference valid sitemap');
+
+    // Verify /sitemap.xml content
+    const sitemapRes = await fetch(`http://localhost:${testPort}/sitemap.xml`);
+    assert.equal(sitemapRes.status, 200);
+    const sitemapText = await sitemapRes.text();
+    assert.ok(sitemapText.includes('https://reelflow-fq7d.onrender.com/terms'), 'sitemap must list /terms');
+    assert.ok(sitemapText.includes('https://reelflow-fq7d.onrender.com/contact'), 'sitemap must list /contact');
+    assert.ok(sitemapText.includes('https://reelflow-fq7d.onrender.com/privacy'), 'sitemap must list /privacy');
   } finally {
     child.kill('SIGTERM');
   }
