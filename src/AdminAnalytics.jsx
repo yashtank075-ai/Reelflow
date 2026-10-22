@@ -226,8 +226,8 @@ export default function AdminAnalytics({ onBack }) {
             </div>
 
             <div className="storage-badge-wrap">
-              <span className="storage-badge">
-                <Database size={13} />
+              <span className={`storage-badge ${analytics?.isPersistent ? 'persistent' : 'warning'}`}>
+                {analytics?.isPersistent ? <Database size={13} /> : <AlertTriangle size={13} />}
                 <span>{analytics?.storageType || 'Storage'}</span>
               </span>
               <button 
@@ -241,6 +241,13 @@ export default function AdminAnalytics({ onBack }) {
               </button>
             </div>
           </div>
+
+          {analytics?.storageWarning && (
+            <div className="admin-alert warning">
+              <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+              <span>{analytics.storageWarning}</span>
+            </div>
+          )}
 
           {dataError && <div className="admin-alert error">{dataError}</div>}
 

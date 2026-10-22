@@ -5,35 +5,92 @@ const { Pool } = pg;
 
 // In-memory fallback ring buffers for resilient analytics when DB is not configured or temporarily down
 const MEMORY_LIMIT = 5000;
-const memoryEvents = [];
-const memoryRateLimitEvents = [];
+let memoryEvents = [];
+let memoryRateLimitEvents = [];
 
 let pool = null;
 let dbInitialized = false;
+let dbInitializationError = null;
 
-// Check if DATABASE_URL is configured
-if (process.env.DATABASE_URL) {
-  try {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-    pool.on('error', (err) => {
-      console.error('[Analytics DB Pool Error]', err.message);
-    });
-  } catch (err) {
-    console.error('[Analytics DB Init Error]', err.message);
+/**
+ * Configure or reconfigure the PostgreSQL connection pool
+ */
+export function configurePool(connectionString = process.env.DATABASE_URL, customPool = null) {
+  if (pool) {
+    try {
+      pool.end().catch(() => {});
+    } catch {}
+    pool = null;
+    dbInitialized = false;
+    dbInitializationError = null;
   }
+
+  if (customPool) {
+    pool = customPool;
+    return pool;
+  }
+
+  if (connectionString) {
+    try {
+      const PoolClass = pg.Pool || Pool;
+      pool = new PoolClass({
+        connectionString,
+        ssl: connectionString.includes('localhost') || connectionString.includes('127.0.0.1')
+          ? false
+          : { rejectUnauthorized: false },
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+      });
+      pool.on('error', (err) => {
+        console.error('[Analytics DB Pool Error]', err.message);
+      });
+    } catch (err) {
+      dbInitializationError = err.message;
+      console.error('[Analytics DB Pool Creation Error]', err.message);
+    }
+  }
+  return pool;
+}
+
+// Automatically configure pool on module load if DATABASE_URL is present
+if (process.env.DATABASE_URL) {
+  configurePool(process.env.DATABASE_URL);
 }
 
 /**
- * Initialize PostgreSQL Schema safely
+ * Close pool and cleanup (useful for tests or graceful shutdown)
+ */
+export async function closePool() {
+  if (pool) {
+    try {
+      await pool.end();
+    } catch {}
+    pool = null;
+  }
+  dbInitialized = false;
+  dbInitializationError = null;
+}
+
+/**
+ * Reset memory analytics (primarily for testing purposes)
+ */
+export function resetMemoryAnalytics() {
+  memoryEvents = [];
+  memoryRateLimitEvents = [];
+}
+
+/**
+ * Initialize PostgreSQL Schema safely without recreating or erasing existing data
  */
 export async function initAnalyticsDb() {
-  if (!pool) return false;
+  if (!pool && process.env.DATABASE_URL) {
+    configurePool(process.env.DATABASE_URL);
+  }
+  if (!pool) {
+    dbInitialized = false;
+    return false;
+  }
   try {
     const client = await pool.connect();
     try {
@@ -60,15 +117,29 @@ export async function initAnalyticsDb() {
         CREATE INDEX IF NOT EXISTS idx_analytics_rl_created_at ON analytics_rate_limits(created_at);
       `);
       dbInitialized = true;
+      dbInitializationError = null;
       console.log('[Analytics] PostgreSQL schema verified and ready');
       return true;
     } finally {
       client.release();
     }
   } catch (err) {
+    dbInitialized = false;
+    dbInitializationError = err.message;
     console.warn('[Analytics] DB connection failed. Using in-memory analytics mode:', err.message);
     return false;
   }
+}
+
+/**
+ * Get current storage status for diagnostic reporting
+ */
+export function getAnalyticsStorageStatus() {
+  return {
+    isConfigured: Boolean(process.env.DATABASE_URL),
+    isInitialized: dbInitialized && Boolean(pool),
+    error: dbInitializationError,
+  };
 }
 
 // Allowed enums for strict data validation (privacy-preserving)
@@ -86,6 +157,7 @@ export function recordAnalyticsEvent({
   errorCategory = null,
   durationMs = null,
   statusCode = null,
+  createdAt = null,
 }) {
   const safeEventType = ALLOWED_EVENT_TYPES.has(eventType) ? eventType : 'unknown';
   const safePlatform = ALLOWED_PLATFORMS.has(platform) ? platform : 'unknown';
@@ -93,7 +165,7 @@ export function recordAnalyticsEvent({
   const safeCategory = errorCategory ? String(errorCategory).slice(0, 64) : null;
   const safeDuration = typeof durationMs === 'number' && durationMs >= 0 ? Math.round(durationMs) : null;
   const safeStatus = typeof statusCode === 'number' ? statusCode : null;
-  const now = new Date();
+  const now = createdAt instanceof Date ? createdAt : new Date();
 
   // Always write to in-memory ring buffer (ensures dashboard works everywhere)
   memoryEvents.push({
@@ -122,8 +194,8 @@ export function recordAnalyticsEvent({
 /**
  * Record an HTTP 429 rate limit hit
  */
-export function recordRateLimitHit() {
-  const now = new Date();
+export function recordRateLimitHit(timestamp = null) {
+  const now = timestamp instanceof Date ? timestamp : new Date();
   memoryRateLimitEvents.push(now);
   if (memoryRateLimitEvents.length > MEMORY_LIMIT) memoryRateLimitEvents.shift();
 
@@ -134,7 +206,7 @@ export function recordRateLimitHit() {
 }
 
 /**
- * Run 30-day retention cleanup safely
+ * Run 30-day retention cleanup safely (preserves 7-day reports)
  */
 export async function pruneOldAnalytics() {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -160,25 +232,67 @@ export async function pruneOldAnalytics() {
 }
 
 /**
+ * Generate a contiguous list of calendar days in UTC (YYYY-MM-DD)
+ * @param {number} dayCount - Number of days up to and including today in UTC
+ * @param {Date} [referenceDate] - Optional anchor date (defaults to now)
+ */
+export function generateUtcDateBuckets(dayCount = 7, referenceDate = new Date()) {
+  const buckets = [];
+  const ref = new Date(referenceDate);
+  const anchorMidnight = Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate());
+
+  for (let i = dayCount - 1; i >= 0; i--) {
+    const dayDate = new Date(anchorMidnight - i * 86400000);
+    buckets.push(dayDate.toISOString().split('T')[0]);
+  }
+  return buckets;
+}
+
+/**
  * Query aggregated analytics for the admin dashboard
  */
 export async function getAggregatedAnalytics(range = '7d', activeDownloadsCount = 0) {
   const validRanges = { '24h': 1, '7d': 7, '30d': 30 };
   const days = validRanges[range] || 7;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  // For 7d and 30d, compute calendar start at 00:00:00.000 UTC
+  const now = new Date();
+  let since;
+  if (days === 1) {
+    since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  } else {
+    since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (days - 1), 0, 0, 0, 0));
+  }
+
+  const expectedDays = days > 1 ? generateUtcDateBuckets(days, now) : [];
 
   if (pool && dbInitialized) {
     try {
-      return await queryDatabaseAnalytics(since, activeDownloadsCount);
+      return await queryDatabaseAnalytics(since, activeDownloadsCount, expectedDays);
     } catch (err) {
       console.warn('[Analytics] DB query failed, falling back to in-memory store:', err.message);
+      const fallbackData = queryMemoryAnalytics(since, activeDownloadsCount, expectedDays);
+      fallbackData.storageType = 'In-Memory (Fallback)';
+      fallbackData.isPersistent = false;
+      fallbackData.storageWarning = 'Database query failed. Displaying temporary in-memory metrics. Real persistence is temporarily degraded.';
+      return fallbackData;
     }
   }
 
-  return queryMemoryAnalytics(since, activeDownloadsCount);
+  const memData = queryMemoryAnalytics(since, activeDownloadsCount, expectedDays);
+  if (process.env.DATABASE_URL) {
+    memData.storageType = 'In-Memory (DB Unreachable)';
+    memData.isPersistent = false;
+    memData.storageWarning = 'DATABASE_URL is configured but database connection could not be established. Historical data will reset on server restart.';
+  } else {
+    memData.storageType = 'In-Memory (Ephemeral)';
+    memData.isPersistent = false;
+    memData.storageWarning = 'DATABASE_URL is not set. Analytics are running in ephemeral in-memory mode and will reset on server restart or redeploy.';
+  }
+  return memData;
 }
 
-async function queryDatabaseAnalytics(since, activeDownloadsCount) {
+async function queryDatabaseAnalytics(since, activeDownloadsCount, expectedDays = []) {
   const client = await pool.connect();
   try {
     const summaryRes = await client.query(`
@@ -212,7 +326,7 @@ async function queryDatabaseAnalytics(since, activeDownloadsCount) {
 
     const trendsRes = await client.query(`
       SELECT 
-        DATE_TRUNC('day', created_at) as day,
+        TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') as day,
         COUNT(*) FILTER (WHERE event_type = 'lookup') as lookups,
         COUNT(*) FILTER (WHERE event_type = 'download' AND outcome = 'success') as downloads
       FROM analytics_events
@@ -226,8 +340,29 @@ async function queryDatabaseAnalytics(since, activeDownloadsCount) {
     const completedDownloads = Number(s.completed_downloads || 0);
     const downloadSuccessRate = totalDownloads > 0 ? Math.round((completedDownloads / totalDownloads) * 100) : 0;
 
+    // Map DB trends into daily buckets
+    const trendMap = new Map();
+    for (const row of trendsRes.rows) {
+      if (row.day) {
+        trendMap.set(row.day, {
+          date: row.day,
+          lookups: Number(row.lookups || 0),
+          downloads: Number(row.downloads || 0),
+        });
+      }
+    }
+
+    let dailyTrends;
+    if (expectedDays.length > 0) {
+      dailyTrends = expectedDays.map(d => trendMap.get(d) || { date: d, lookups: 0, downloads: 0 });
+    } else {
+      dailyTrends = Array.from(trendMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    }
+
     return {
       storageType: 'PostgreSQL',
+      isPersistent: true,
+      storageWarning: null,
       summary: {
         totalLookups: Number(s.total_lookups || 0),
         successfulLookups: Number(s.successful_lookups || 0),
@@ -244,18 +379,14 @@ async function queryDatabaseAnalytics(since, activeDownloadsCount) {
         activeDownloads: activeDownloadsCount,
       },
       topErrors: errorsRes.rows.map(r => ({ category: r.error_category, count: Number(r.count) })),
-      dailyTrends: trendsRes.rows.map(r => ({
-        date: r.day ? new Date(r.day).toISOString().split('T')[0] : '',
-        lookups: Number(r.lookups || 0),
-        downloads: Number(r.downloads || 0),
-      })),
+      dailyTrends,
     };
   } finally {
     client.release();
   }
 }
 
-function queryMemoryAnalytics(since, activeDownloadsCount) {
+function queryMemoryAnalytics(since, activeDownloadsCount, expectedDays = []) {
   const sinceTime = since.getTime();
   const events = memoryEvents.filter(e => e.createdAt.getTime() >= sinceTime);
   const rlHits = memoryRateLimitEvents.filter(d => d.getTime() >= sinceTime).length;
@@ -313,12 +444,23 @@ function queryMemoryAnalytics(since, activeDownloadsCount) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  const dailyTrends = Object.entries(dayBuckets)
-    .map(([date, counts]) => ({ date, lookups: counts.lookups, downloads: counts.downloads }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  let dailyTrends;
+  if (expectedDays.length > 0) {
+    dailyTrends = expectedDays.map(d => ({
+      date: d,
+      lookups: dayBuckets[d]?.lookups || 0,
+      downloads: dayBuckets[d]?.downloads || 0,
+    }));
+  } else {
+    dailyTrends = Object.entries(dayBuckets)
+      .map(([date, counts]) => ({ date, lookups: counts.lookups, downloads: counts.downloads }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
 
   return {
-    storageType: pool && dbInitialized ? 'PostgreSQL' : 'In-Memory (Resilient)',
+    storageType: 'In-Memory (Resilient)',
+    isPersistent: false,
+    storageWarning: null,
     summary: {
       totalLookups,
       successfulLookups,
@@ -338,3 +480,4 @@ function queryMemoryAnalytics(since, activeDownloadsCount) {
     dailyTrends,
   };
 }
+
