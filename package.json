@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node api.js && concurrently \"npm run server\" \"npm run client\"",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "node server/index.js",
     "client": "vite --host 0.0.0.0",
-    "build": "node api.js && vite build",
+    "build": "vite build",
     "test": "node --test test/**/*.test.js",
     "render-build": "npm run build && mkdir -p bin && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o bin/yt-dlp && chmod a+rx bin/yt-dlp && (which ffmpeg || (curl -L https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/linux-x64 -o bin/ffmpeg && chmod a+rx bin/ffmpeg))",
-    "start": "node api.js && node server/index.js"
+    "start": "node server/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
