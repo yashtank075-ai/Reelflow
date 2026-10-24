@@ -746,8 +746,8 @@ app.get('/api/media/:token/download', async (req, res) => {
 
   try {
     await runYtDlp(
-      ['--no-warnings', '--no-playlist', '--no-part', '--merge-output-format', 'mp4', '--max-filesize', String(MAX_DOWNLOAD_BYTES), '--socket-timeout', '12', '--retries', '1', '-f', formatForQuality(req.query.quality), '-o', outputTemplate, '--', job.url], 
-      120_000, 
+      ['--no-playlist', '--no-part', '--merge-output-format', 'mp4', '--max-filesize', String(MAX_DOWNLOAD_BYTES), '--socket-timeout', '12', '--retries', '1', '-f', formatForQuality(req.query.quality), '-o', outputTemplate, '--', job.url],
+      120_000,
       abortController.signal
     );
     const files = await fs.promises.readdir(dir);
