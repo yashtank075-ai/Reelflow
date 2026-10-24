@@ -1075,10 +1075,10 @@ export function formatForQuality(quality) {
     ? String(quality || "best")
     : "best";
   if (selected === "best") {
-    return "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b[ext=mp4][acodec!=none]/b[acodec!=none]";
+    return "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b[ext=mp4][acodec!=?none]/b[acodec!=?none]";
   }
   const height = Number(selected);
-  return `bv*[height<=${height}][ext=mp4]+ba[ext=m4a]/bv*[height<=${height}]+ba/b[height<=${height}][ext=mp4][acodec!=none]/b[height<=${height}][acodec!=none]/b[acodec!=none]`;
+  return `bv*[height<=${height}][ext=mp4]+ba[ext=m4a]/bv*[height<=${height}]+ba/b[height<=${height}][ext=mp4][acodec!=?none]/b[height<=${height}][acodec!=?none]/b[acodec!=?none]`;
 }
 
 app.get("/api/media/:token/download", async (req, res) => {
