@@ -9,7 +9,10 @@ import {
   resolveFfmpegBinary, 
   resolveFfprobeBinary, 
   verifyMediaAudio,
-  parseMediaPermalink
+  parseMediaPermalink,
+  runYtDlp,
+  isFfmpegMergerFailure,
+  safeYtDlpError
 } from '../server/index.js';
 
 test('Format Selection: formatForQuality produces valid yt-dlp format strings requiring audio for all quality options', () => {
@@ -233,6 +236,30 @@ test('Binary Precedence: Local bin/ directory or FFMPEG_PATH takes precedence ov
     else delete process.env.FFMPEG_PATH;
   }
 });
+test('safeYtDlpError: Classifies FFmpeg merger and postprocessing errors clearly', () => {
+  const errFfmpegNotFound = safeYtDlpError('WARNING: You have requested merging of multiple formats but ffmpeg is not installed. The formats won\'t be merged.');
+  assert.equal(errFfmpegNotFound, 'Media processing tool (FFmpeg) encountered an error merging audio and video streams.');
 
+  const errMergerFailed = safeYtDlpError('ERROR: Postprocessing: ffprobe or ffmpeg not found. Please install or provide the path using --ffmpeg-location');
+  assert.equal(errMergerFailed, 'Media processing tool (FFmpeg) encountered an error merging audio and video streams.');
 
+  const errRateLimit = safeYtDlpError('HTTP Error 429: Too Many Requests');
+  assert.equal(errRateLimit, 'The platform is temporarily rate-limiting requests. Wait a while before trying again.');
+});
 
+test('isFfmpegMergerFailure: Accurately identifies merger failures and does not flag harmless warnings', () => {
+  // Proven FFmpeg merger failure messages
+  assert.equal(isFfmpegMergerFailure('WARNING: You have requested merging of multiple formats but ffmpeg is not installed. The formats won\'t be merged.'), true);
+  assert.equal(isFfmpegMergerFailure('ERROR: Postprocessing: ffprobe or ffmpeg not found. Please install or provide the path using --ffmpeg-location'), true);
+  assert.equal(isFfmpegMergerFailure('ffmpeg exited with code 1: Invalid argument'), true);
+  assert.equal(isFfmpegMergerFailure('ffmpeg: error while loading shared libraries: libm.so.6'), true);
+  assert.equal(isFfmpegMergerFailure('Postprocessing: ffmpeg merger failed'), true);
+
+  // Harmless warnings from yt-dlp or extractors that must NOT fail a valid download
+  assert.equal(isFfmpegMergerFailure('WARNING: [youtube] Incomplete data received in player response'), false);
+  assert.equal(isFfmpegMergerFailure('WARNING: [facebook] URL contains unsupported tracking parameters'), false);
+  assert.equal(isFfmpegMergerFailure('WARNING: [instagram] Trying to fall back to GraphQL API'), false);
+  assert.equal(isFfmpegMergerFailure('WARNING: unable to extract thumbnail url'), false);
+  assert.equal(isFfmpegMergerFailure(''), false);
+  assert.equal(isFfmpegMergerFailure(null), false);
+});

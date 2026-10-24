@@ -400,15 +400,22 @@ export async function verifyMediaAudio(filePath) {
   });
 }
 
-function runYtDlp(args, timeoutMs = 45_000, abortSignal = null) {
+export function runYtDlp(args, timeoutMs = 45_000, abortSignal = null) {
   return new Promise((resolve, reject) => {
     const binary = resolveYtDlpBinary();
     const finalArgs = [...args];
     const ffmpegPath = resolveFfmpegBinary();
-    if (ffmpegPath && !finalArgs.includes('--ffmpeg-location')) {
-      finalArgs.unshift('--ffmpeg-location', path.dirname(ffmpegPath));
+    const spawnEnv = { ...process.env };
+    if (ffmpegPath) {
+      const ffmpegDir = path.dirname(ffmpegPath);
+      // Prepend ffmpeg directory to PATH so yt-dlp and its spawned helpers locate ffmpeg and ffprobe
+      const pathKey = Object.keys(spawnEnv).find(k => k.toLowerCase() === 'path') || 'PATH';
+      spawnEnv[pathKey] = ffmpegDir + (path.delimiter || (process.platform === 'win32' ? ';' : ':')) + (spawnEnv[pathKey] || '');
+      if (!finalArgs.includes('--ffmpeg-location')) {
+        finalArgs.unshift('--ffmpeg-location', ffmpegPath);
+      }
     }
-    const child = spawn(binary, finalArgs, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(binary, finalArgs, { shell: false, windowsHide: true, env: spawnEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = ''; let settled = false;
     const timer = setTimeout(() => { child.kill('SIGKILL'); finish(new Error('The media request timed out. Try again later.')); }, timeoutMs);
     const finish = (err, value) => { 
@@ -435,16 +442,44 @@ function runYtDlp(args, timeoutMs = 45_000, abortSignal = null) {
     child.stdout.on('data', chunk => { stdout += chunk.toString(); if (stdout.length > 2_000_000) { child.kill('SIGKILL'); finish(new Error('Media metadata response was too large.')); } });
     child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-4000); });
     child.on('error', err => finish(new Error(err.code === 'ENOENT' ? 'The server is missing yt-dlp. Install it and ensure the yt-dlp command is on PATH.' : 'Could not start the media downloader.')));
-    child.on('close', code => code === 0 ? finish(null, { stdout, stderr }) : finish(new Error(safeYtDlpError(stderr))));
+    child.on('close', code => {
+      if (code !== 0) {
+        finish(new Error(safeYtDlpError(stderr)));
+        return;
+      }
+      if (isFfmpegMergerFailure(stderr)) {
+        finish(new Error('Media processing tool (FFmpeg) encountered an error merging audio and video streams.'));
+        return;
+      }
+      finish(null, { stdout, stderr });
+    });
   });
 }
-function safeYtDlpError(stderr) {
+
+export function isFfmpegMergerFailure(stderr) {
+  const s = String(stderr || '').toLowerCase();
+  const mentionsTool = s.includes('ffmpeg') || s.includes('ffprobe');
+  if (!mentionsTool) return false;
+  // Specific patterns indicating binary absence or merger failure:
+  // e.g. "ffmpeg not found", "ffmpeg is not installed", "merging of multiple formats but ffmpeg", "postprocessing: ffprobe or ffmpeg not found", "ffmpeg exited with code"
+  return (
+    s.includes('not found') ||
+    s.includes('not installed') ||
+    s.includes('merging of multiple formats') ||
+    (s.includes('postprocessing') && (s.includes('error') || s.includes('failed') || s.includes('not found'))) ||
+    s.includes('merger') ||
+    s.includes('exited with code') ||
+    s.includes('error while loading shared libraries')
+  );
+}
+
+export function safeYtDlpError(stderr) {
   const s = String(stderr || '').toLowerCase();
   if (s.includes('empty media response')) return 'Instagram blocked guest access or sent an empty media response. The platform requires account login for this Reel.';
   if (s.includes('private') || s.includes('login required') || s.includes('sign in') || s.includes('cookies')) return 'This video is private, age-restricted, or requires login. ReelFlow does not collect social-media passwords or use login cookies.';
   if (s.includes('429') || s.includes('rate-limit')) return 'The platform is temporarily rate-limiting requests. Wait a while before trying again.';
   if (s.includes('unsupported url')) return 'This video URL could not be processed. Check the link or update yt-dlp.';
-  if (s.includes('ffmpeg') && (s.includes('not found') || s.includes('merger') || s.includes('postprocessing'))) {
+  if (isFfmpegMergerFailure(stderr)) {
     return 'Media processing tool (FFmpeg) encountered an error merging audio and video streams.';
   }
   return 'The platform did not provide accessible media. The video may be unavailable, restricted, or blocked by the platform.';
