@@ -30,16 +30,23 @@ test('Format Selection: formatForQuality produces valid yt-dlp format strings re
     // Check audio presence in expressions
     assert.ok(fmt.includes('+ba'), `Format string for "${q}" must include audio stream pairing`);
     assert.ok(fmt.includes('/b'), `Format string for "${q}" must include pre-muxed video+audio fallback`);
+    // Check that every single-format fallback explicitly requires an audio codec
+    const branches = fmt.split('/');
+    for (const b of branches) {
+      if (!b.includes('+')) {
+        assert.ok(b.includes('acodec!=none'), `Single-format fallback "${b}" must explicitly require acodec!=none`);
+      }
+    }
   }
 
   // Exact check for 'best'
-  assert.equal(formatForQuality('best'), 'bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b[ext=mp4]/b');
+  assert.equal(formatForQuality('best'), 'bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b[ext=mp4][acodec!=none]/b[acodec!=none]');
 
   // Exact check for 1080
-  assert.equal(formatForQuality('1080'), 'bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080][ext=mp4]/b[height<=1080]/b');
+  assert.equal(formatForQuality('1080'), 'bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080][ext=mp4][acodec!=none]/b[height<=1080][acodec!=none]/b[acodec!=none]');
 
   // Exact check for 720
-  assert.equal(formatForQuality('720'), 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720][ext=mp4]/b[height<=720]/b');
+  assert.equal(formatForQuality('720'), 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720][ext=mp4][acodec!=none]/b[height<=720][acodec!=none]/b[acodec!=none]');
 });
 
 test('FFmpeg & FFprobe Resolution: Detects installed binaries or handles absence gracefully', () => {
@@ -127,8 +134,8 @@ test('Format Selection: All five quality options preserve audio pairing and comb
     assert.equal(parts.length, expectedLength, `Format for ${q} should have ${expectedLength} fallback levels`);
     assert.ok(parts[0].includes('+ba[ext=m4a]'), `Part 0 for ${q} should prefer m4a audio`);
     assert.ok(parts[1].includes('+ba'), `Part 1 for ${q} should allow any audio`);
-    assert.ok(parts[2].startsWith('b[') || parts[2] === 'b[ext=mp4]', `Part 2 for ${q} should fall back to pre-muxed combined audio/video`);
-    assert.ok(parts[parts.length - 1] === 'b', `Last fallback for ${q} should fall back to pre-muxed combined audio/video 'b'`);
+    assert.ok(parts[2].startsWith('b[') && parts[2].includes('acodec!=none'), `Part 2 for ${q} should fall back to pre-muxed combined audio/video requiring audio`);
+    assert.ok(parts[parts.length - 1] === 'b[acodec!=none]', `Last fallback for ${q} must explicitly require audio codec`);
   }
 });
 
