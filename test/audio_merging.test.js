@@ -12,7 +12,8 @@ import {
   parseMediaPermalink,
   runYtDlp,
   isFfmpegMergerFailure,
-  safeYtDlpError
+  safeYtDlpError,
+  buildMissingAudioDiagnostic
 } from '../server/index.js';
 
 test('Format Selection: formatForQuality produces valid yt-dlp format strings requiring audio for all quality options', () => {
@@ -191,7 +192,8 @@ test('Stream Merging & Verification: Merging separate video and audio streams pr
     assert.equal(verification.verified, true, 'Merged file must be verified by ffprobe');
     assert.equal(verification.hasAudio, true, 'Merged file must contain an audio stream');
     assert.equal(verification.hasVideo, true, 'Merged file must contain a video stream');
-    assert.ok(verification.streams.includes('video') && verification.streams.includes('audio'));
+    const streamTypes = (verification.streams || []).map(s => typeof s === 'object' ? s.type : s);
+    assert.ok(streamTypes.includes('video') && streamTypes.includes('audio'));
   } finally {
     await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
@@ -262,4 +264,130 @@ test('isFfmpegMergerFailure: Accurately identifies merger failures and does not 
   assert.equal(isFfmpegMergerFailure('WARNING: unable to extract thumbnail url'), false);
   assert.equal(isFfmpegMergerFailure(''), false);
   assert.equal(isFfmpegMergerFailure(null), false);
+});
+
+test('buildMissingAudioDiagnostic: Accurately classifies failure, ignores directories, and sanitizes filenames', async () => {
+  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rf-diag-test-'));
+
+  try {
+    // 1. Simulate video_only_output condition (only reelflow.mp4 exists)
+    await fs.promises.writeFile(path.join(tmpDir, 'reelflow.mp4'), 'mock_video_bytes');
+    // An unrelated file that should NOT match the safe pattern and should be omitted
+    await fs.promises.writeFile(path.join(tmpDir, 'secret_token_123.txt'), 'do_not_log');
+    // A subdirectory that should be ignored
+    await fs.promises.mkdir(path.join(tmpDir, 'reelflow.subfolder'));
+
+    const diag1 = await buildMissingAudioDiagnostic({
+      provider: 'instagram',
+      tempDir: tmpDir,
+      audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [{ type: 'video', codec: 'vp09' }] },
+      exitStatus: 0
+    });
+
+    assert.equal(diag1.event, 'audio_verification_failure');
+    assert.equal(diag1.provider, 'instagram');
+    assert.equal(diag1.failureCategory, 'video_only_output');
+    assert.equal(diag1.exitStatus, 0);
+    assert.equal(diag1.hasAudio, false);
+    assert.equal(diag1.hasVideo, true);
+    // Unrelated file and subfolder omitted
+    assert.equal(diag1.files.length, 1);
+    assert.equal(diag1.files[0].name, 'reelflow.mp4');
+    assert.equal(diag1.files[0].sizeBytes, 16);
+    // Streams contains structured [{type, codec}]
+    assert.deepEqual(diag1.streams, [{ type: 'video', codec: 'vp09' }]);
+
+    // 2. Simulate audio_intermediate_present condition
+    await fs.promises.writeFile(path.join(tmpDir, 'reelflow.fdash-1234a.m4a'), 'mock_audio_bytes');
+    const diag2 = await buildMissingAudioDiagnostic({
+      provider: 'facebook',
+      tempDir: tmpDir,
+      audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [{ type: 'video', codec: 'av01' }] }
+    });
+    assert.equal(diag2.failureCategory, 'audio_intermediate_present');
+    assert.equal(diag2.provider, 'facebook');
+    assert.equal(diag2.files.length, 2);
+
+    // 3. Simulate audio_intermediate_missing condition (video intermediate exists, but no audio intermediate)
+    await fs.promises.unlink(path.join(tmpDir, 'reelflow.fdash-1234a.m4a'));
+    await fs.promises.writeFile(path.join(tmpDir, 'reelflow.fdash-5678v.mp4'), 'mock_video_inter');
+    const diag3 = await buildMissingAudioDiagnostic({
+      provider: 'instagram',
+      tempDir: tmpDir,
+      audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [{ type: 'video', codec: 'vp09' }] }
+    });
+    assert.equal(diag3.failureCategory, 'audio_intermediate_missing');
+
+    // 4. Simulate ambiguous intermediate file (non-standard extension)
+    await fs.promises.writeFile(path.join(tmpDir, 'reelflow.custompart.xyz'), 'mock_bytes');
+    const diag4 = await buildMissingAudioDiagnostic({
+      provider: 'instagram',
+      tempDir: tmpDir,
+      audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [] }
+    });
+    assert.equal(diag4.failureCategory, 'intermediate_files_inconclusive');
+
+    // 5. Privacy check: JSON stringification contains no URLs, tokens, cookies, or secrets
+    const jsonStr = JSON.stringify(diag4);
+    assert.ok(!jsonStr.includes('secret_token'));
+    assert.ok(!jsonStr.includes('http://'));
+    assert.ok(!jsonStr.includes('https://'));
+    assert.ok(!jsonStr.includes('cookies'));
+    assert.ok(!jsonStr.includes('token='));
+
+    // 6. Bounded diagnostic output: streams and files lists are bounded and safe
+    const diagBounded = await buildMissingAudioDiagnostic({
+      provider: 'unknown-provider-inject-attempt',
+      tempDir: tmpDir,
+      audioVerification: {
+        verified: true,
+        hasAudio: false,
+        hasVideo: true,
+        streams: Array.from({ length: 25 }, (_, i) => ({ type: `type_${i}`, codec: `codec_${i}` }))
+      }
+    });
+    assert.equal(diagBounded.provider, 'unknown');
+    assert.ok(diagBounded.streams.length <= 10, 'Streams must be bounded to maximum 10');
+    assert.ok(diagBounded.files.length <= 10, 'Files must be bounded to maximum 10');
+
+    // 7. Diagnostic collection failure does not bypass strict audio verification
+    // Calling buildMissingAudioDiagnostic on a missing directory does not throw and returns clean event
+    const diagFailingDir = await buildMissingAudioDiagnostic({
+      provider: 'instagram',
+      tempDir: path.join(tmpDir, 'non_existent_subdir'),
+      audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [] }
+    });
+    assert.equal(diagFailingDir.event, 'audio_verification_failure');
+    assert.equal(diagFailingDir.hasAudio, false);
+    assert.equal(diagFailingDir.failureCategory, 'video_only_output');
+
+    // 8. Process failures: if runYtDlp throws before returning an exit status, exitStatus is retained as null
+    const diagProcessFailure = await buildMissingAudioDiagnostic({
+      provider: 'facebook',
+      tempDir: tmpDir,
+      audioVerification: { verified: false, hasAudio: false, reason: 'ffprobe_failed' },
+      exitStatus: null
+    });
+    assert.equal(diagProcessFailure.exitStatus, null);
+    assert.equal(diagProcessFailure.failureCategory, 'ffprobe_failed');
+
+    // 9. Final video-only output with no intermediate files present
+    const cleanDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rf-clean-test-'));
+    try {
+      await fs.promises.writeFile(path.join(cleanDir, 'reelflow.mp4'), 'final_mp4_bytes');
+      const diagClean = await buildMissingAudioDiagnostic({
+        provider: 'instagram',
+        tempDir: cleanDir,
+        audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [{ type: 'video', codec: 'h264' }] },
+        exitStatus: 0
+      });
+      assert.equal(diagClean.failureCategory, 'video_only_output');
+      assert.equal(diagClean.files.length, 1);
+      assert.equal(diagClean.files[0].name, 'reelflow.mp4');
+    } finally {
+      await fs.promises.rm(cleanDir, { recursive: true, force: true }).catch(() => {});
+    }
+  } finally {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
 });

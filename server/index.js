@@ -366,7 +366,7 @@ export async function verifyMediaAudio(filePath) {
   const probeBin = resolveFfprobeBinary();
   const probeCommand = probeBin || 'ffprobe';
   return new Promise((resolve) => {
-    const args = ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'default=noprint_wrappers=1:nokey=1', filePath];
+    const args = ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name', '-of', 'json', filePath];
     const child = spawn(probeCommand, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let settled = false;
@@ -392,9 +392,21 @@ export async function verifyMediaAudio(filePath) {
         resolve({ verified: false, hasAudio: false, reason: 'ffprobe_failed' });
         return;
       }
-      const streams = stdout.split(/\r?\n/).map(s => s.trim().toLowerCase()).filter(Boolean);
-      const hasAudio = streams.includes('audio');
-      const hasVideo = streams.includes('video');
+      let parsed = null;
+      try {
+        parsed = JSON.parse(stdout);
+      } catch {
+        resolve({ verified: false, hasAudio: false, reason: 'ffprobe_parse_failed' });
+        return;
+      }
+      const rawStreams = Array.isArray(parsed?.streams) ? parsed.streams : [];
+      const streams = rawStreams.map(s => ({
+        type: String(s?.codec_type || '').toLowerCase(),
+        codec: String(s?.codec_name || '').toLowerCase()
+      })).filter(s => s.type);
+
+      const hasAudio = streams.some(s => s.type === 'audio');
+      const hasVideo = streams.some(s => s.type === 'video');
       resolve({ verified: true, hasAudio, hasVideo, streams });
     });
   });
@@ -451,7 +463,7 @@ export function runYtDlp(args, timeoutMs = 45_000, abortSignal = null) {
         finish(new Error('Media processing tool (FFmpeg) encountered an error merging audio and video streams.'));
         return;
       }
-      finish(null, { stdout, stderr });
+      finish(null, { stdout, stderr, exitCode: code });
     });
   });
 }
@@ -484,6 +496,99 @@ export function safeYtDlpError(stderr) {
   }
   return 'The platform did not provide accessible media. The video may be unavailable, restricted, or blocked by the platform.';
 }
+
+export async function buildMissingAudioDiagnostic({ provider, tempDir, audioVerification, exitStatus = null }) {
+  const sanitizedProvider = ['instagram', 'facebook', 'youtube'].includes(provider) ? provider : 'unknown';
+  const fileEntries = [];
+  let foundAudioIntermediate = false;
+  let foundVideoIntermediate = false;
+  let hasInconclusiveFiles = false;
+
+  const audioExtensions = new Set(['.m4a', '.aac', '.mp3', '.opus', '.ogg', '.wav', '.flac']);
+  const videoExtensions = new Set(['.mp4', '.mkv', '.webm', '.flv', '.mov', '.avi']);
+  const finalOutputPattern = /^reelflow\.[a-zA-Z0-9]{1,8}$/;
+  // Explicitly recognized yt-dlp intermediate file patterns (e.g. reelflow.f123.mp4, reelflow.fdash-audio.m4a, reelflow.temp.webm)
+  const intermediatePattern = /^reelflow\.(f[a-zA-Z0-9_-]+|fdash-[a-zA-Z0-9_-]+|temp|[a-zA-Z0-9_-]+)\.[a-zA-Z0-9]{1,8}$/;
+
+  try {
+    const dirEntries = await fs.promises.readdir(tempDir, { withFileTypes: true });
+    for (const ent of dirEntries) {
+      if (!ent.isFile()) continue;
+      // Match safe expected filenames starting with reelflow
+      if (!/^reelflow(\.[a-zA-Z0-9._-]+)?$/.test(ent.name)) continue;
+
+      let sizeBytes = null;
+      try {
+        const s = await fs.promises.stat(path.join(tempDir, ent.name));
+        sizeBytes = s.size;
+      } catch {}
+
+      fileEntries.push({ name: ent.name, sizeBytes });
+
+      const ext = path.extname(ent.name).toLowerCase();
+      const isFinal = finalOutputPattern.test(ent.name);
+      const isIntermediate = intermediatePattern.test(ent.name);
+
+      if (isFinal) {
+        // Final output file (e.g. reelflow.mp4), treated separately from intermediates
+        continue;
+      }
+
+      if (!isIntermediate) {
+        // Any file starting with reelflow that is neither recognized final output nor recognized intermediate
+        hasInconclusiveFiles = true;
+        continue;
+      }
+
+      if (audioExtensions.has(ext)) {
+        foundAudioIntermediate = true;
+      } else if (videoExtensions.has(ext)) {
+        foundVideoIntermediate = true;
+      } else {
+        hasInconclusiveFiles = true;
+      }
+    }
+  } catch {}
+
+  let failureCategory = 'unknown';
+  if (!audioVerification?.verified) {
+    failureCategory = audioVerification?.reason || 'audio_verification_unverified';
+  } else if (!audioVerification?.hasAudio) {
+    if (foundAudioIntermediate) {
+      failureCategory = 'audio_intermediate_present';
+    } else if (hasInconclusiveFiles) {
+      failureCategory = 'intermediate_files_inconclusive';
+    } else if (foundVideoIntermediate) {
+      failureCategory = 'audio_intermediate_missing';
+    } else {
+      failureCategory = 'video_only_output';
+    }
+  }
+
+  const sanitizedStreams = Array.isArray(audioVerification?.streams)
+    ? audioVerification.streams.slice(0, 10).map(s => {
+        if (typeof s === 'object' && s !== null) {
+          return {
+            type: String(s.type || '').slice(0, 20),
+            codec: String(s.codec || '').slice(0, 20)
+          };
+        }
+        return { type: String(s || '').slice(0, 20), codec: '' };
+      })
+    : [];
+
+  return {
+    event: 'audio_verification_failure',
+    provider: sanitizedProvider,
+    failureCategory,
+    exitStatus: typeof exitStatus === 'number' ? exitStatus : null,
+    hasAudio: Boolean(audioVerification?.hasAudio),
+    hasVideo: Boolean(audioVerification?.hasVideo),
+    streams: sanitizedStreams,
+    files: fileEntries.slice(0, 10)
+  };
+}
+
 function safeMetadata(info, parsed, token) {
   // Extract available unique heights/resolutions from formats if provided
   let availableResolutions = [];
@@ -744,8 +849,9 @@ app.get('/api/media/:token/download', async (req, res) => {
     }
   });
 
+  let ytDlpResult = null;
   try {
-    await runYtDlp(
+    ytDlpResult = await runYtDlp(
       ['--no-playlist', '--no-part', '--merge-output-format', 'mp4', '--max-filesize', String(MAX_DOWNLOAD_BYTES), '--socket-timeout', '12', '--retries', '1', '-f', formatForQuality(req.query.quality), '-o', outputTemplate, '--', job.url],
       120_000,
       abortController.signal
@@ -759,6 +865,16 @@ app.get('/api/media/:token/download', async (req, res) => {
 
     const audioVerification = await verifyMediaAudio(fullPath);
     if (!audioVerification.verified || !audioVerification.hasAudio) {
+      try {
+        const diag = await buildMissingAudioDiagnostic({
+          provider: job.provider,
+          tempDir: dir,
+          audioVerification,
+          exitStatus: ytDlpResult?.exitCode ?? null
+        });
+        console.warn(`[DIAGNOSTIC] Missing audio: ${JSON.stringify(diag)}`);
+      } catch {}
+
       if (audioVerification.verified && !audioVerification.hasAudio) {
         throw new Error('Downloaded video stream has no audio. The audio track could not be retrieved or merged.');
       }
