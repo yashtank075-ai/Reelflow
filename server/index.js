@@ -497,7 +497,14 @@ export function safeYtDlpError(stderr) {
   return 'The platform did not provide accessible media. The video may be unavailable, restricted, or blocked by the platform.';
 }
 
-export async function buildMissingAudioDiagnostic({ provider, tempDir, audioVerification, exitStatus = null }) {
+export async function buildMissingAudioDiagnostic({
+  provider,
+  tempDir,
+  audioVerification,
+  exitStatus = null,
+  stdout = '',
+  stderr = ''
+}) {
   const sanitizedProvider = ['instagram', 'facebook', 'youtube'].includes(provider) ? provider : 'unknown';
   const fileEntries = [];
   let foundAudioIntermediate = false;
@@ -577,6 +584,38 @@ export async function buildMissingAudioDiagnostic({ provider, tempDir, audioVeri
       })
     : [];
 
+  // Extract selected format IDs safely without logging arbitrary output or URLs
+  // Pattern matches: "[info] ... Downloading [N] format(s): <format_ids>"
+  let selectedFormatIds = null;
+  let formatMessageSource = null;
+
+  const stdoutStr = typeof stdout === 'string' ? stdout : '';
+  const stderrStr = typeof stderr === 'string' ? stderr : '';
+
+  const formatMatchStdout = stdoutStr.match(/Downloading \d+ format\(s\):\s*([a-zA-Z0-9_+.-]+)/);
+  const formatMatchStderr = stderrStr.match(/Downloading \d+ format\(s\):\s*([a-zA-Z0-9_+.-]+)/);
+
+  if (formatMatchStdout && formatMatchStdout[1]) {
+    selectedFormatIds = formatMatchStdout[1].slice(0, 50);
+    formatMessageSource = 'stdout';
+  } else if (formatMatchStderr && formatMatchStderr[1]) {
+    selectedFormatIds = formatMatchStderr[1].slice(0, 50);
+    formatMessageSource = 'stderr';
+  }
+
+  // Detect whether a merger step was observed in stdout or stderr
+  const mergerInStdout = stdoutStr.includes('[Merger]');
+  const mergerInStderr = stderrStr.includes('[Merger]');
+  const mergerObserved = mergerInStdout || mergerInStderr;
+  let mergerMessageSource = null;
+  if (mergerInStdout && mergerInStderr) {
+    mergerMessageSource = 'both';
+  } else if (mergerInStdout) {
+    mergerMessageSource = 'stdout';
+  } else if (mergerInStderr) {
+    mergerMessageSource = 'stderr';
+  }
+
   return {
     event: 'audio_verification_failure',
     provider: sanitizedProvider,
@@ -585,7 +624,11 @@ export async function buildMissingAudioDiagnostic({ provider, tempDir, audioVeri
     hasAudio: Boolean(audioVerification?.hasAudio),
     hasVideo: Boolean(audioVerification?.hasVideo),
     streams: sanitizedStreams,
-    files: fileEntries.slice(0, 10)
+    files: fileEntries.slice(0, 10),
+    selectedFormatIds,
+    formatMessageSource,
+    mergerObserved,
+    mergerMessageSource
   };
 }
 
@@ -870,7 +913,9 @@ app.get('/api/media/:token/download', async (req, res) => {
           provider: job.provider,
           tempDir: dir,
           audioVerification,
-          exitStatus: ytDlpResult?.exitCode ?? null
+          exitStatus: ytDlpResult?.exitCode ?? null,
+          stdout: ytDlpResult?.stdout ?? '',
+          stderr: ytDlpResult?.stderr ?? ''
         });
         console.warn(`[DIAGNOSTIC] Missing audio: ${JSON.stringify(diag)}`);
       } catch {}

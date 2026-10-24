@@ -387,6 +387,45 @@ test('buildMissingAudioDiagnostic: Accurately classifies failure, ignores direct
     } finally {
       await fs.promises.rm(cleanDir, { recursive: true, force: true }).catch(() => {});
     }
+
+    // 10. Format IDs parsed from representative sanitized yt-dlp stdout
+    const diagFormatStdout = await buildMissingAudioDiagnostic({
+      provider: 'instagram',
+      tempDir: tmpDir,
+      audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [] },
+      stdout: '[info] dQw4w9WgXcQ: Downloading 1 format(s): 401+140\n[Merger] Merging formats into "reelflow.mp4"\n',
+      stderr: ''
+    });
+    assert.equal(diagFormatStdout.selectedFormatIds, '401+140');
+    assert.equal(diagFormatStdout.formatMessageSource, 'stdout');
+    assert.equal(diagFormatStdout.mergerObserved, true);
+    assert.equal(diagFormatStdout.mergerMessageSource, 'stdout');
+
+    // 11. Format IDs and merger message detected in stderr (or both)
+    const diagFormatStderr = await buildMissingAudioDiagnostic({
+      provider: 'facebook',
+      tempDir: tmpDir,
+      audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [] },
+      stdout: '',
+      stderr: '[info] 12345: Downloading 1 format(s): dash-1080p\n[Merger] Merging formats into "reelflow.mp4"\n'
+    });
+    assert.equal(diagFormatStderr.selectedFormatIds, 'dash-1080p');
+    assert.equal(diagFormatStderr.formatMessageSource, 'stderr');
+    assert.equal(diagFormatStderr.mergerObserved, true);
+    assert.equal(diagFormatStderr.mergerMessageSource, 'stderr');
+
+    // 12. Format IDs absent or malformed, and no merger observed
+    const diagNoMerger = await buildMissingAudioDiagnostic({
+      provider: 'instagram',
+      tempDir: tmpDir,
+      audioVerification: { verified: true, hasAudio: false, hasVideo: true, streams: [] },
+      stdout: '[download] Destination: reelflow.mp4\n[download] 100% of 6.00MiB\n',
+      stderr: 'WARNING: Some warning\n'
+    });
+    assert.equal(diagNoMerger.selectedFormatIds, null);
+    assert.equal(diagNoMerger.formatMessageSource, null);
+    assert.equal(diagNoMerger.mergerObserved, false);
+    assert.equal(diagNoMerger.mergerMessageSource, null);
   } finally {
     await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
