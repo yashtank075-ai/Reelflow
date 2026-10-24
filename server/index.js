@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
@@ -280,6 +280,18 @@ function resolveYtDlpBinary() {
   return process.env.YT_DLP_PATH || 'yt-dlp';
 }
 
+function findBinaryOnSystem(name) {
+  const cmd = process.platform === 'win32' ? 'where' : 'which';
+  try {
+    const res = spawnSync(cmd, [name], { encoding: 'utf8', windowsHide: true });
+    if (res.status === 0 && res.stdout) {
+      const first = res.stdout.trim().split(/\r?\n/)[0];
+      if (first && fs.existsSync(first.trim())) return first.trim();
+    }
+  } catch {}
+  return null;
+}
+
 export function resolveFfmpegBinary() {
   if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
     return process.env.FFMPEG_PATH;
@@ -316,6 +328,10 @@ export function resolveFfmpegBinary() {
       }
     }
   }
+  // Check system PATH
+  const systemPath = findBinaryOnSystem('ffmpeg');
+  if (systemPath) return systemPath;
+
   return null;
 }
 
@@ -339,6 +355,10 @@ export function resolveFfprobeBinary() {
       return probeExe;
     }
   }
+  // Check system PATH
+  const systemPath = findBinaryOnSystem('ffprobe');
+  if (systemPath) return systemPath;
+
   return null;
 }
 
