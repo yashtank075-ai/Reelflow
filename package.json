@@ -9,7 +9,7 @@
     "client": "vite --host 0.0.0.0",
     "build": "vite build",
     "test": "node --test test/**/*.test.js",
-    "render-build": "npm run build && mkdir -p bin && curl -fSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o bin/yt-dlp && chmod a+rx bin/yt-dlp && (which ffmpeg >/dev/null 2>&1 || (curl -fSL https://github.com/ffbinaries/ffbinaries-prebuilt/releases/download/v6.1/ffmpeg-6.1-linux-64.zip -o bin/ffmpeg.zip && unzip -o bin/ffmpeg.zip -d bin && rm -f bin/ffmpeg.zip && chmod a+rx bin/ffmpeg)) && (which ffprobe >/dev/null 2>&1 || (curl -fSL https://github.com/ffbinaries/ffbinaries-prebuilt/releases/download/v6.1/ffprobe-6.1-linux-64.zip -o bin/ffprobe.zip && unzip -o bin/ffprobe.zip -d bin && rm -f bin/ffprobe.zip && chmod a+rx bin/ffprobe))",
+    "render-build": "npm run build && mkdir -p bin && curl -fSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o bin/yt-dlp && chmod a+rx bin/yt-dlp && curl -fSL https://github.com/ffbinaries/ffbinaries-prebuilt/releases/download/v6.1/ffmpeg-6.1-linux-64.zip -o bin/ffmpeg.zip && unzip -o bin/ffmpeg.zip -d bin && rm -f bin/ffmpeg.zip && chmod a+rx bin/ffmpeg && curl -fSL https://github.com/ffbinaries/ffbinaries-prebuilt/releases/download/v6.1/ffprobe-6.1-linux-64.zip -o bin/ffprobe.zip && unzip -o bin/ffprobe.zip -d bin && rm -f bin/ffprobe.zip && chmod a+rx bin/ffprobe",
     "start": "node server/index.js"
   },
   "dependencies": {

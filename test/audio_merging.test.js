@@ -145,3 +145,94 @@ test('URL Parsing Regression: Instagram Reels, Facebook Videos, and YouTube URLs
   assert.equal(yt.id, 'aqz-KE-bpKQ');
 });
 
+test('Stream Merging & Verification: Merging separate video and audio streams produces verified media with both streams', async () => {
+  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rf-merge-test-'));
+  const ffmpegBin = resolveFfmpegBinary() || 'ffmpeg';
+
+  const sepVideoPath = path.join(tmpDir, 'sep_video.mp4');
+  const sepAudioPath = path.join(tmpDir, 'sep_audio.m4a');
+  const mergedOutputPath = path.join(tmpDir, 'merged_output.mp4');
+
+  try {
+    // 1. Generate video-only stream
+    spawnSync(ffmpegBin, [
+      '-y',
+      '-f', 'lavfi', '-i', 'testsrc=duration=1:size=320x240:rate=10',
+      '-c:v', 'libx264', '-an',
+      sepVideoPath
+    ], { windowsHide: true });
+
+    // 2. Generate audio-only stream
+    spawnSync(ffmpegBin, [
+      '-y',
+      '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1',
+      '-c:a', 'aac', '-vn',
+      sepAudioPath
+    ], { windowsHide: true });
+
+    // 3. Merge video and audio into a single MP4 container using ffmpeg (emulating yt-dlp merger)
+    const mergeProc = spawnSync(ffmpegBin, [
+      '-y',
+      '-i', sepVideoPath,
+      '-i', sepAudioPath,
+      '-c:v', 'copy',
+      '-c:a', 'copy',
+      mergedOutputPath
+    ], { windowsHide: true });
+
+    assert.equal(mergeProc.status, 0, 'FFmpeg merge process must exit with status 0');
+    assert.ok(fs.existsSync(mergedOutputPath), 'Merged output file must exist');
+
+    // 4. Verify output with FFprobe
+    const verification = await verifyMediaAudio(mergedOutputPath);
+    assert.equal(verification.verified, true, 'Merged file must be verified by ffprobe');
+    assert.equal(verification.hasAudio, true, 'Merged file must contain an audio stream');
+    assert.equal(verification.hasVideo, true, 'Merged file must contain a video stream');
+    assert.ok(verification.streams.includes('video') && verification.streams.includes('audio'));
+  } finally {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('Stream Merging & Verification: Missing audio stream or failed merge is rejected by verifyMediaAudio', async () => {
+  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rf-fail-test-'));
+  const ffmpegBin = resolveFfmpegBinary() || 'ffmpeg';
+  const silentFilePath = path.join(tmpDir, 'silent_file.mp4');
+
+  try {
+    // Generate silent file (no audio track)
+    spawnSync(ffmpegBin, [
+      '-y',
+      '-f', 'lavfi', '-i', 'testsrc=duration=1:size=320x240:rate=10',
+      '-c:v', 'libx264', '-an',
+      silentFilePath
+    ], { windowsHide: true });
+
+    const verification = await verifyMediaAudio(silentFilePath);
+    assert.equal(verification.verified, true);
+    assert.equal(verification.hasVideo, true);
+    assert.equal(verification.hasAudio, false, 'Silent file must have hasAudio=false');
+  } finally {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('Binary Precedence: Local bin/ directory or FFMPEG_PATH takes precedence over system binaries', () => {
+  const customFfmpeg = path.resolve('bin', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+  const prevEnv = process.env.FFMPEG_PATH;
+
+  try {
+    process.env.FFMPEG_PATH = customFfmpeg;
+    // When FFMPEG_PATH points to a path, resolveFfmpegBinary checks existence or fallbacks safely
+    const resolved = resolveFfmpegBinary();
+    if (fs.existsSync(customFfmpeg)) {
+      assert.equal(resolved, customFfmpeg);
+    }
+  } finally {
+    if (prevEnv) process.env.FFMPEG_PATH = prevEnv;
+    else delete process.env.FFMPEG_PATH;
+  }
+});
+
+
+

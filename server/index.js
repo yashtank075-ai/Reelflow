@@ -492,14 +492,20 @@ function safeMetadata(info, parsed, token) {
   };
 }
 
-app.get('/api/health', (_req, res) => res.json({ 
-  ok: true, 
-  service: 'ReelFlow API', 
-  downloader: 'yt-dlp', 
-  ffmpeg: Boolean(resolveFfmpegBinary()),
-  credentialsRequired: false, 
-  supportedPlatforms: ['instagram', 'facebook', 'youtube'] 
-}));
+app.get('/api/health', (_req, res) => {
+  const ffmpeg = resolveFfmpegBinary();
+  const ffprobe = resolveFfprobeBinary();
+  return res.json({ 
+    ok: true, 
+    service: 'ReelFlow API', 
+    downloader: 'yt-dlp', 
+    ffmpeg: Boolean(ffmpeg),
+    ffprobe: Boolean(ffprobe),
+    mediaToolsReady: Boolean(ffmpeg && ffprobe),
+    credentialsRequired: false, 
+    supportedPlatforms: ['instagram', 'facebook', 'youtube'] 
+  });
+});
 
 async function fetchYouTubeOEmbed(url) {
   const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
