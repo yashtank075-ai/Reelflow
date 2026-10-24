@@ -30,23 +30,23 @@ test('Format Selection: formatForQuality produces valid yt-dlp format strings re
     // Check audio presence in expressions
     assert.ok(fmt.includes('+ba'), `Format string for "${q}" must include audio stream pairing`);
     assert.ok(fmt.includes('/b'), `Format string for "${q}" must include pre-muxed video+audio fallback`);
-    // Check that every single-format fallback explicitly requires an audio codec
+    // Check that every single-format fallback explicitly excludes video-only while permitting unknown codec metadata
     const branches = fmt.split('/');
     for (const b of branches) {
       if (!b.includes('+')) {
-        assert.ok(b.includes('acodec!=none'), `Single-format fallback "${b}" must explicitly require acodec!=none`);
+        assert.ok(b.includes('acodec!=?none'), `Single-format fallback "${b}" must require acodec!=?none`);
       }
     }
   }
 
   // Exact check for 'best'
-  assert.equal(formatForQuality('best'), 'bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b[ext=mp4][acodec!=none]/b[acodec!=none]');
+  assert.equal(formatForQuality('best'), 'bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b[ext=mp4][acodec!=?none]/b[acodec!=?none]');
 
   // Exact check for 1080
-  assert.equal(formatForQuality('1080'), 'bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080][ext=mp4][acodec!=none]/b[height<=1080][acodec!=none]/b[acodec!=none]');
+  assert.equal(formatForQuality('1080'), 'bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080][ext=mp4][acodec!=?none]/b[height<=1080][acodec!=?none]/b[acodec!=?none]');
 
   // Exact check for 720
-  assert.equal(formatForQuality('720'), 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720][ext=mp4][acodec!=none]/b[height<=720][acodec!=none]/b[acodec!=none]');
+  assert.equal(formatForQuality('720'), 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720][ext=mp4][acodec!=?none]/b[height<=720][acodec!=?none]/b[acodec!=?none]');
 });
 
 test('FFmpeg & FFprobe Resolution: Detects installed binaries or handles absence gracefully', () => {
@@ -134,8 +134,78 @@ test('Format Selection: All five quality options preserve audio pairing and comb
     assert.equal(parts.length, expectedLength, `Format for ${q} should have ${expectedLength} fallback levels`);
     assert.ok(parts[0].includes('+ba[ext=m4a]'), `Part 0 for ${q} should prefer m4a audio`);
     assert.ok(parts[1].includes('+ba'), `Part 1 for ${q} should allow any audio`);
-    assert.ok(parts[2].startsWith('b[') && parts[2].includes('acodec!=none'), `Part 2 for ${q} should fall back to pre-muxed combined audio/video requiring audio`);
-    assert.ok(parts[parts.length - 1] === 'b[acodec!=none]', `Last fallback for ${q} must explicitly require audio codec`);
+    assert.ok(parts[2].startsWith('b[') && parts[2].includes('acodec!=?none'), `Part 2 for ${q} should fall back to pre-muxed combined audio/video requiring audio`);
+    assert.ok(parts[parts.length - 1] === 'b[acodec!=?none]', `Last fallback for ${q} must require acodec!=?none`);
+  }
+});
+
+test('Format Selection: Representative yt-dlp fixtures verify progressive, video-only, and DASH streams', async () => {
+  function evaluateFormatSelector(formats, selector) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rf-selector-fixture-'));
+    try {
+      const infoPath = path.join(tmpDir, 'test.info.json');
+      fs.writeFileSync(infoPath, JSON.stringify({
+        id: 'fixture_media',
+        title: 'Fixture Media',
+        extractor: 'generic',
+        extractor_key: 'Generic',
+        formats
+      }));
+      const res = spawnSync('yt-dlp', ['--load-info-json', infoPath, '-f', selector, '--print', '%(format_id)s']);
+      return {
+        exitCode: res.status,
+        selectedId: res.stdout?.toString().trim() || null,
+        stderr: res.stderr?.toString().trim() || ''
+      };
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  // 1. Facebook-style progressive formats: undefined acodec and vcodec
+  const fbProgressiveFormats = [
+    { format_id: 'sd', ext: 'mp4', url: 'https://example.com/sd.mp4' },
+    { format_id: 'hd', ext: 'mp4', url: 'https://example.com/hd.mp4' }
+  ];
+  for (const q of ['best', '1080', '720', '480', '360']) {
+    const evalRes = evaluateFormatSelector(fbProgressiveFormats, formatForQuality(q));
+    assert.equal(evalRes.exitCode, 0, `FB progressive formats must be supported for quality ${q}`);
+    assert.ok(evalRes.selectedId === 'hd' || evalRes.selectedId === 'sd', `FB progressive selected ${evalRes.selectedId}`);
+  }
+
+  // 2. Instagram-style progressive formats: formats '1', '2', '3' with undefined codec metadata
+  const igProgressiveFormats = [
+    { format_id: '1', ext: 'mp4', url: 'https://example.com/1.mp4' },
+    { format_id: '2', ext: 'mp4', url: 'https://example.com/2.mp4' },
+    { format_id: '3', ext: 'mp4', url: 'https://example.com/3.mp4' }
+  ];
+  const igRes = evaluateFormatSelector(igProgressiveFormats, formatForQuality('best'));
+  assert.equal(igRes.exitCode, 0, 'Instagram progressive formats with undefined codecs must be supported');
+  assert.ok(['1', '2', '3'].includes(igRes.selectedId), `Instagram progressive selected ${igRes.selectedId}`);
+
+  // 3. Separate video-only and audio-only DASH streams (must pair together)
+  const dashFormats = [
+    { format_id: 'dash-audio', ext: 'm4a', acodec: 'mp4a.40.5', vcodec: 'none', url: 'https://example.com/audio.m4a' },
+    { format_id: 'dash-video-720', ext: 'mp4', height: 720, acodec: 'none', vcodec: 'vp09.00.31.08', url: 'https://example.com/video720.mp4' },
+    { format_id: 'dash-video-1080', ext: 'mp4', height: 1080, acodec: 'none', vcodec: 'vp09.00.40.08', url: 'https://example.com/video1080.mp4' }
+  ];
+  const dashBest = evaluateFormatSelector(dashFormats, formatForQuality('best'));
+  assert.equal(dashBest.exitCode, 0);
+  assert.equal(dashBest.selectedId, 'dash-video-1080+dash-audio', 'Separate DASH streams must be paired');
+
+  const dash720 = evaluateFormatSelector(dashFormats, formatForQuality('720'));
+  assert.equal(dash720.exitCode, 0);
+  assert.equal(dash720.selectedId, 'dash-video-720+dash-audio', 'Separate DASH streams must respect height limit and pair');
+
+  // 4. Formats explicitly marked acodec: 'none' (video-only stream with NO audio counterpart available)
+  // Must be rejected rather than delivering a silent video
+  const silentOnlyFormats = [
+    { format_id: 'silent-dash-v', ext: 'mp4', acodec: 'none', vcodec: 'h264', url: 'https://example.com/silent.mp4' }
+  ];
+  for (const q of ['best', '1080', '720', '480', '360']) {
+    const silentRes = evaluateFormatSelector(silentOnlyFormats, formatForQuality(q));
+    assert.notEqual(silentRes.exitCode, 0, `Video-only formats explicitly marked acodec:none must be rejected for quality ${q}`);
+    assert.ok(silentRes.stderr.includes('Requested format is not available'), 'yt-dlp must refuse format selection when only silent format exists');
   }
 });
 
