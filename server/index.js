@@ -280,13 +280,17 @@ function resolveYtDlpBinary() {
   return process.env.YT_DLP_PATH || 'yt-dlp';
 }
 
-function resolveFfmpegBinary() {
+export function resolveFfmpegBinary() {
   if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
     return process.env.FFMPEG_PATH;
   }
   const localBin = path.resolve(__dirname, '../bin/ffmpeg');
   if (fs.existsSync(localBin)) {
     return localBin;
+  }
+  const localBinExe = path.resolve(__dirname, '../bin/ffmpeg.exe');
+  if (fs.existsSync(localBinExe)) {
+    return localBinExe;
   }
   if (process.platform === 'win32') {
     const localAppData = process.env.LOCALAPPDATA || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Local') : '');
@@ -298,9 +302,10 @@ function resolveFfmpegBinary() {
           const pkg = entries.find(name => name.toLowerCase().includes('ffmpeg'));
           if (pkg) {
             const pkgPath = path.join(wingetDir, pkg);
-            // Search bin folder or direct directory
             const candidateBin = path.join(pkgPath, 'bin', 'ffmpeg.exe');
             if (fs.existsSync(candidateBin)) return candidateBin;
+            const directExe = path.join(pkgPath, 'ffmpeg.exe');
+            if (fs.existsSync(directExe)) return directExe;
             const subdirs = fs.readdirSync(pkgPath);
             for (const sub of subdirs) {
               const nestedBin = path.join(pkgPath, sub, 'bin', 'ffmpeg.exe');
@@ -312,6 +317,67 @@ function resolveFfmpegBinary() {
     }
   }
   return null;
+}
+
+export function resolveFfprobeBinary() {
+  if (process.env.FFPROBE_PATH && fs.existsSync(process.env.FFPROBE_PATH)) {
+    return process.env.FFPROBE_PATH;
+  }
+  const localBin = path.resolve(__dirname, '../bin/ffprobe');
+  if (fs.existsSync(localBin)) {
+    return localBin;
+  }
+  const localBinExe = path.resolve(__dirname, '../bin/ffprobe.exe');
+  if (fs.existsSync(localBinExe)) {
+    return localBinExe;
+  }
+  const ffmpegPath = resolveFfmpegBinary();
+  if (ffmpegPath) {
+    const dir = path.dirname(ffmpegPath);
+    const probeExe = path.join(dir, process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe');
+    if (fs.existsSync(probeExe)) {
+      return probeExe;
+    }
+  }
+  return null;
+}
+
+export async function verifyMediaAudio(filePath) {
+  const probeBin = resolveFfprobeBinary();
+  const probeCommand = probeBin || 'ffprobe';
+  return new Promise((resolve) => {
+    const args = ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'default=noprint_wrappers=1:nokey=1', filePath];
+    const child = spawn(probeCommand, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGKILL');
+      resolve({ verified: false, hasAudio: false, reason: 'ffprobe_timeout' });
+    }, 5000);
+
+    child.stdout.on('data', chunk => { stdout += chunk.toString(); });
+    child.on('error', () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ verified: false, hasAudio: false, reason: 'ffprobe_not_available' });
+    });
+    child.on('close', code => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code !== 0) {
+        resolve({ verified: false, hasAudio: false, reason: 'ffprobe_failed' });
+        return;
+      }
+      const streams = stdout.split(/\r?\n/).map(s => s.trim().toLowerCase()).filter(Boolean);
+      const hasAudio = streams.includes('audio');
+      const hasVideo = streams.includes('video');
+      resolve({ verified: true, hasAudio, hasVideo, streams });
+    });
+  });
 }
 
 function runYtDlp(args, timeoutMs = 45_000, abortSignal = null) {
@@ -358,6 +424,9 @@ function safeYtDlpError(stderr) {
   if (s.includes('private') || s.includes('login required') || s.includes('sign in') || s.includes('cookies')) return 'This video is private, age-restricted, or requires login. ReelFlow does not collect social-media passwords or use login cookies.';
   if (s.includes('429') || s.includes('rate-limit')) return 'The platform is temporarily rate-limiting requests. Wait a while before trying again.';
   if (s.includes('unsupported url')) return 'This video URL could not be processed. Check the link or update yt-dlp.';
+  if (s.includes('ffmpeg') && (s.includes('not found') || s.includes('merger') || s.includes('postprocessing'))) {
+    return 'Media processing tool (FFmpeg) encountered an error merging audio and video streams.';
+  }
   return 'The platform did not provide accessible media. The video may be unavailable, restricted, or blocked by the platform.';
 }
 function safeMetadata(info, parsed, token) {
@@ -539,17 +608,14 @@ app.post('/api/media/lookup', async (req, res) => {
   }
 });
 
-function formatForQuality(quality) {
+export function formatForQuality(quality) {
   const allowed = new Set(['best', '1080', '720', '480', '360']);
   const selected = allowed.has(String(quality || 'best')) ? String(quality || 'best') : 'best';
   if (selected === 'best') {
-    // Priority:
-    // 1. Best video with audio merged: bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio
-    // 2. Best pre-merged video with audio: best[ext=mp4]/best
-    return 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best';
+    return 'bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b[ext=mp4]/b';
   }
   const height = Number(selected);
-  return `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/best`;
+  return `bv*[height<=${height}][ext=mp4]+ba[ext=m4a]/bv*[height<=${height}]+ba/b[height<=${height}][ext=mp4]/b[height<=${height}]/b`;
 }
 
 app.get('/api/media/:token/download', async (req, res) => {
@@ -629,6 +695,15 @@ app.get('/api/media/:token/download', async (req, res) => {
     const fullPath = path.join(dir, filename);
     const stat = await fs.promises.stat(fullPath);
     if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_DOWNLOAD_BYTES) throw new Error('The video exceeded the permitted download size.');
+
+    const audioVerification = await verifyMediaAudio(fullPath);
+    if (!audioVerification.verified || !audioVerification.hasAudio) {
+      if (audioVerification.verified && !audioVerification.hasAudio) {
+        throw new Error('Downloaded video stream has no audio. The audio track could not be retrieved or merged.');
+      }
+      throw new Error('Video audio track could not be verified by media tools.');
+    }
+
     const ext = path.extname(filename).toLowerCase();
 
     res.setHeader('Content-Type', ext === '.mp4' ? 'video/mp4' : 'application/octet-stream');
@@ -676,6 +751,9 @@ app.get('/api/media/:token/download', async (req, res) => {
       if (msg.includes('timed out')) cat = 'Download timed out';
       else if (msg.includes('exceeded the permitted download size')) cat = 'Exceeded maximum file size';
       else if (msg.includes('missing yt-dlp')) cat = 'Server missing yt-dlp';
+      else if (msg.includes('no audio')) cat = 'Video stream missing audio';
+      else if (msg.includes('could not be verified')) cat = 'Audio stream unverified';
+      else if (msg.includes('FFmpeg')) cat = 'FFmpeg merge failed';
 
       recordAnalyticsEvent({
         eventType: 'download',
@@ -766,4 +844,10 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   res.sendFile(path.join(clientDist, 'index.html'), err => { if (err) next(); });
 });
-app.listen(PORT, () => console.log(`ReelFlow API running at http://localhost:${PORT}`));
+
+const isMainModule = Boolean(process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url));
+if (isMainModule) {
+  app.listen(PORT, () => console.log(`ReelFlow API running at http://localhost:${PORT}`));
+}
+
+export { app };
